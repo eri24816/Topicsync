@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, List, Tuple
 import websockets
 import asyncio
 import json
@@ -6,27 +6,18 @@ from collections import defaultdict
 from chatroom import logger
 import threading
 
+from chatroom.client.topic import Topic, TopicChange
+
 class ChatroomClient:
     def __init__(self,host):
         self._host = host
-        self._topics = {}
+        self._topics:Dict[str,Topic] = {}
         self._client_id = None
         self._message_handlers = {
             "hello":self._HandleHello,
             "update":self._HandleUpdate,
         }
-        self._topic_handlers = defaultdict(list)
         self._logger = logger.Logger(logger.DEBUG)
-
-    def Run(self):
-        '''
-        Run the client
-        '''
-        self.connected_event =threading.Event()
-        self.thread = threading.Thread(target=self._ThreadedRun)
-        self.thread.daemon = True
-        self.thread.start()
-        self.connected_event.wait()
 
     def _ThreadedRun(self):
         '''
@@ -79,11 +70,19 @@ class ChatroomClient:
         '''
         message_type,message_content = self.ParseMessage(message)
         await self._message_handlers[message_type](message_content)
-    def SendToServer(self,message):
+
+    def SendToServerRaw(self,message):
+        '''
+        Send a raw message to the server
+        '''
+        self._sending_queue.put_nowait(message)
+
+    def SendToServer(self,*args,**kwargs):
         '''
         Send a message to the server
         '''
-        self._sending_queue.put_nowait(message)
+        message = self.MakeMessage(*args,**kwargs)
+        self.SendToServerRaw(message)
 
     '''
     ================================
@@ -102,10 +101,10 @@ class ChatroomClient:
         Handle an update message from the server
         '''
         topic_name = message_content["topic"]
-        payload = message_content["payload"]
-        assert topic_name in self._topic_handlers
-        for handler in self._topic_handlers[topic_name]:
-            handler(payload)
+        change = TopicChange(message_content["change"])
+        source = message_content["source"]
+
+        self._topics[topic_name].Update(change,source)
 
     '''
     ================================
@@ -113,27 +112,61 @@ class ChatroomClient:
     ================================
     '''
 
+    def Run(self):
+        '''
+        Run the client
+        '''
+        self.connected_event =threading.Event()
+        self.thread = threading.Thread(target=self._ThreadedRun)
+        self.thread.daemon = True
+        self.thread.start()
+        self.connected_event.wait()
+
+    def GetID(self):
+        '''
+        Get the client ID
+        '''
+        return self._client_id
+
     def AddTopicHandler(self,topic_name,handler):
         '''
         Add a handler for a topic
         '''
-        if len(self._topic_handlers[topic_name])==0:
-            self.SendToServer(self.MakeMessage("subscribe",topic=topic_name))
-        self._topic_handlers[topic_name].append(handler)
+        if topic_name not in self._topics:
+            topic = self._topics[topic_name] = Topic(self,topic_name)
+            topic.AddListener(handler)
 
     def RemoveTopicHandler(self,topic_name,handler):
         '''
         Remove a handler for a topic
         '''
-        self._topic_handlers[topic_name].remove(handler)
-        if len(self._topic_handlers[topic_name])==0:
-            self.SendToServer(self.MakeMessage("unsubscribe",topic=topic_name))
+        assert topic_name in self._topics
+        self._topics[topic_name].RemoveListener(handler)
 
-    def Publish(self,topic_name,payload):
+    def Publish(self,topic_name,value):
         '''
         Publish a topic
         '''
-        self.SendToServer(self.MakeMessage("publish",topic=topic_name,payload=payload))
+        self.SendToServer("publish",topic=topic_name,value=value)
+
+    # interface with Topic class
+    def TryPublish(self,topic:Topic,change:TopicChange):
+        '''
+        Try to update a topic
+        '''
+        self.SendToServer("try_publish",source=self.GetID(),topic=topic.GetName(),change=change.Serialize())
+
+    def Subscribe(self,topic_name):
+        '''
+        Subscribe to a topic
+        '''
+        self.SendToServer("subscribe",topic=topic_name)
+
+    def Unsubscribe(self,topic_name):
+        '''
+        Unsubscribe from a topic
+        '''
+        self.SendToServer("unsubscribe",topic=topic_name)
 
     '''
     ================================

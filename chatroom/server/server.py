@@ -4,17 +4,19 @@ Clients can subscribe to a topic and receive updates when the topic is updated.
 Clients can also update a topic, which will be synced to all clients.
 '''
 
-from typing import Tuple
+from typing import Dict, Tuple
 import websockets
 import asyncio
 from .topic import Topic
+from .service import Service
 import json
 from itertools import count
 from chatroom import logger
 
 class ChatroomServer:
     def __init__(self):
-        self._topics = {}
+        self._topics :Dict[str,Topic] = {}
+        self._services : Dict[str,Service] = {}
         self.client_id_count = count(1)
         self._logger = logger.Logger(logger.DEBUG)
         self._logger.Info("Chatroom server started")
@@ -34,11 +36,17 @@ class ChatroomServer:
                 self._logger.Debug(f"> {message}")
                 message_type, content = self.ParseMessage(message)
                 if message_type == "publish":
-                    await self.Publish(content["topic"],content["payload"])
+                    await self.Publish(content["topic"],content["value"])
                 elif message_type == "subscribe":
                     await self.Subscribe(client,content["topic"])
                 elif message_type == "unsubscribe":
                     await self.Unsubscribe(client,content["topic"])
+                elif message_type == "try_publish":
+                    await self.TryPublish(client_id,content["topic"],content["change"])
+                elif message_type == "call":
+                    await self.Service(client,content["service"],content["command"],content["args"])
+                elif message_type == "respond":
+                    await self.Respond(content["service"],content["data"])
                 else:
                     await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
         except websockets.exceptions.ConnectionClosed as e:
@@ -50,41 +58,48 @@ class ChatroomServer:
                 if client in topic.GetSubscribers():
                     topic.RemoveSubscriber(client)
 
-    async def SendToClient(self,client,message):
+    async def SendToClientRaw(self,client,message):
         '''
         Send a message to a client
         '''
         await client.send(message)
         self._logger.Debug(f"< {message}")
+
+    async def SendToClient(self,client,*args,**kwargs):
+        '''
+        Send a message to a client
+        '''
+        await self.SendToClientRaw(client,self.MakeMessage(*args,**kwargs))
     '''
     ================================
     Client API functions 
     ================================
     '''
 
-    async def Publish(self,topic_name,payload): 
+    async def Publish(self,topic_name,change): 
         '''
-        Publish a topic and send the new payload to all subscribers
+        Publish a topic and send the new value to all subscribers
         '''
         #TODO: check client version > current version
+        
         if topic_name not in self._topics:
-            topic = self._topics[topic_name] = Topic(topic_name,payload)
+            assert change["type"] == "raw"
+            topic = self._topics[topic_name] = Topic(topic_name,change["value"])
         else:
             topic = self._topics[topic_name]
-            topic.Update(payload)
+            topic.Update(value)
         for subscriber in topic.GetSubscribers():
-            message = self.MakeMessage("update",topic=topic_name,payload=topic.GetPayload())
-            await self.SendToClient(subscriber,message)
+            await self.SendToClient(subscriber,"update",topic=topic_name,value=topic.Getvalue())
 
     async def Subscribe(self,client,topic_name):
         '''
-        Add a client to a topic and send the current payload to the client
+        Add a client to a topic and send the current value to the client
         '''
         if topic_name not in self._topics:
             self._topics[topic_name] = Topic(topic_name,None)
         topic = self._topics[topic_name]
         topic.AddSubscriber(client)
-        await self.SendToClient(client,self.MakeMessage("update",topic=topic_name,payload=topic.GetPayload()))
+        await self.SendToClient(client,"update",topic=topic_name,value=topic.Getvalue())
 
     async def Unsubscribe(self,client,topic_name):
         '''
@@ -93,6 +108,39 @@ class ChatroomServer:
         topic = self._topics[topic_name]
         topic.RemoveSubscriber(client)
 
+    async def TryPublish(self,source,topic_name,change):
+        '''
+        
+        '''
+        publish_validation_service_name = f"_chatroom/topic_validation/{topic_name}"
+        if publish_validation_service_name in self._services: # if there is a validator registered
+            # ask the validator to validate the change
+            await self._services[publish_validation_service_name].Request(source,change)
+        else: # no validator registered. publish directly
+            await self.Publish(topic_name,change)
+
+    async def Service(self,client,service_name,command,args):
+        '''
+        Call a service
+        '''
+        if service_name in self._services:
+            await self._services[service_name].Request(client,command,args)
+        else:
+            await self.SendToClient(client,"message",message=f"Service {service_name} does not exist")
+
+    async def Respond(self,service,data):
+        '''
+        receive a response from a service provider
+        '''
+        source = data["source"]
+        await self.SendToClient(source,"respond",data=data["data"])
+        
+    # outbound messages
+    async def RejectPublish(self,source,topic_name,change):
+        await self.SendToClient(source,"reject_publish",topic=topic_name,change=change)
+    
+    async def Request(self,provider,source,data):
+        await self.SendToClient(provider,"service",source=source,data=data)
 
     '''
     ================================
