@@ -38,7 +38,7 @@ class ChatroomServer:
         self._request_pool : Dict[int,Request] = {}
         
         self._message_handlers:Dict[str,Callable] = {}
-        for message_type in ['request','response','register_service']:
+        for message_type in ['request','response','register_service,'unregister_service']:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
 
         self._logger.Info("Chatroom server started")
@@ -126,6 +126,15 @@ class ChatroomServer:
 
     async def _register_service(self,client,service_name):
         self._services[service_name] = Service(service_name,client)
+
+    async def _unregister_service(self,client,service_name):
+        if service_name not in self._services:
+            self._logger.Error(f"Service {service_name} not registered")
+            return
+        if self._services[service_name].provider != client:
+            self._logger.Error(f"Client {client} is not the provider of service {service_name}")
+            return
+        del self._services[service_name]
 
     async def Publish(self,topic_name,change): 
         '''
