@@ -3,13 +3,20 @@ INFO = 2
 WARNING = 3
 ERROR = 4
 
+level_names = {
+    DEBUG: 'DEBUG',
+    INFO: 'INFO',
+    WARNING: 'WARNING',
+    ERROR: 'ERROR'
+}
+
 class Logger:
     def __init__(self,level=INFO):
         self._level = level
 
     def Log(self,message,level=INFO):
         if level >= self._level:
-            print(message)
+            print(f'[{level_names[level]}] {message}')
 
     def Debug(self,message):
         self.Log(message,DEBUG)

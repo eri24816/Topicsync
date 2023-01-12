@@ -1,8 +1,8 @@
+from __future__ import annotations
 from typing import Callable, List, TYPE_CHECKING
 from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
-
 class Topic:
     def __init__(self,name,client:ChatroomClient):
         self.client = client

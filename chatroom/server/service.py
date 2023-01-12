@@ -1,16 +1,12 @@
+from typing import Dict
+
+
 class Service:
-    def __init__(self,name) -> None:
-        self._name = name
-        self._provider = None
+    def __init__(self,name:str,provider:int) -> None:
+        self.name = name
+        self.provider = provider
 
-    def GetName(self):
-        return self._name
-
-    def SetProvider(self,provider):
-        self._provider = provider
-
-    async def Request(self,source,data):
-        awa
-
-    async def Respond(self,data):
-        pass
+class Request:
+    def __init__(self,id:int,source_client) -> None:
+        self.id = id
+        self.source_client = source_client

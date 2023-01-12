@@ -4,21 +4,43 @@ Clients can subscribe to a topic and receive updates when the topic is updated.
 Clients can also update a topic, which will be synced to all clients.
 '''
 
-from typing import Dict, Tuple
+import queue
+from typing import Callable, Dict, Tuple
 import websockets
 import asyncio
+
 from .topic import Topic
-from .service import Service
+from .service import Service, Request
 import json
 from itertools import count
 from chatroom import logger
 
 class ChatroomServer:
+    @staticmethod
+    def Handler(method, name=None):
+        '''
+        Decorator for a handler
+        '''
+        if name is None:
+            name = method.__name__
+            if name.startswith("_"):
+                name = name[1:]
+        method.__self__._message_handlers[name] = method
+        return method
+
     def __init__(self):
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
         self.client_id_count = count(1)
+        self._clients : Dict[int,websockets.WebSocketServerProtocol] = {}
         self._logger = logger.Logger(logger.DEBUG)
+        self._sending_queue = queue.Queue()
+        self._request_pool : Dict[int,Request] = {}
+        
+        self._message_handlers:Dict[str,Callable] = {}
+        for message_type in ['request','response','register_service']:
+            self._message_handlers[message_type] = getattr(self,'_'+message_type)
+
         self._logger.Info("Chatroom server started")
         
     async def HandleClient(self,client,path):
@@ -27,36 +49,46 @@ class ChatroomServer:
         '''
         try:
             client_id = next(self.client_id_count)
+            self._clients[client_id] = client
             self._logger.Info(f"Client {client_id} connected")
-            await client.send(self.MakeMessage("hello",id=client_id))
-            await self.Publish("_chatroom/server_status",f"[info] Client {client_id} connected")
-            await self.Publish(f"_chatroom/client_message/{client_id}",f"[info] Client {client_id} connected")
+            await self.SendToClient(client,"hello",id=client_id)
+            #await self.Publish("_chatroom/server_status",f"[info] Client {client_id} connected")
+            #await self.Publish(f"_chatroom/client_message/{client_id}",f"[info] Client {client_id} connected")
 
             async for message in client:
                 self._logger.Debug(f"> {message}")
                 message_type, content = self.ParseMessage(message)
-                if message_type == "publish":
-                    await self.Publish(content["topic"],content["value"])
-                elif message_type == "subscribe":
-                    await self.Subscribe(client,content["topic"])
-                elif message_type == "unsubscribe":
-                    await self.Unsubscribe(client,content["topic"])
-                elif message_type == "try_publish":
-                    await self.TryPublish(client_id,content["topic"],content["change"])
-                elif message_type == "call":
-                    await self.Service(client,content["service"],content["command"],content["args"])
-                elif message_type == "respond":
-                    await self.Respond(content["service"],content["data"])
+                if message_type in self._message_handlers:
+                    await self._message_handlers[message_type](client = client,**content)
                 else:
-                    await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
+                    self._logger.Error(f"Unknown message type: {message_type}")
+                    pass
+                    #await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
+                # if message_type == "publish":
+                #     await self.Publish(content["topic"],content["value"])
+                # elif message_type == "subscribe":
+                #     await self.Subscribe(client,content["topic"])
+                # elif message_type == "unsubscribe":
+                #     await self.Unsubscribe(client,content["topic"])
+                # elif message_type == "try_publish":
+                #     await self.TryPublish(client_id,content["topic"],content["change"])
+                # elif message_type == "call":
+                #     await self.Service(client,content["service"],content["command"],content["args"])
+                # elif message_type == "respond":
+                #     await self.Respond(content["service"],content["data"])
+                # else:
+                #     await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
         except websockets.exceptions.ConnectionClosed as e:
             print(e)
             self._logger.Info(f"Client {client_id} disconnected")
-            await self.Publish("_chatroom/server_status",f"[info] Client {client_id} disconnected")
+            #await self.Publish("_chatroom/server_status",f"[info] Client {client_id} disconnected")
             # clear subscriptions
             for topic in self._topics.values():
                 if client in topic.GetSubscribers():
                     topic.RemoveSubscriber(client)
+            del self._clients[client_id]
+        
+        print("Client disconnected aaa")
 
     async def SendToClientRaw(self,client,message):
         '''
@@ -75,6 +107,25 @@ class ChatroomServer:
     Client API functions 
     ================================
     '''
+
+    async def _request(self,client,service_name,args,request_id):
+        '''
+        Request a service. The server forwards the request to the service provider.
+        '''
+        service = self._services[service_name]
+        self._request_pool.update({request_id:Request(request_id,client)})
+        await self.SendToClient(service.provider,"request",service_name=service_name,args=args,request_id=request_id)
+
+    async def _response(self,client,response,request_id):
+        '''
+        Response to a service request. The server forwards the response to the client.
+        '''
+        request = self._request_pool.pop(request_id)
+        source_client = request.source_client
+        await self.SendToClient(source_client,"response",response=response,request_id=request_id)
+
+    async def _register_service(self,client,service_name):
+        self._services[service_name] = Service(service_name,client)
 
     async def Publish(self,topic_name,change): 
         '''
@@ -148,12 +199,8 @@ class ChatroomServer:
     ================================
     '''
 
-    def MakeMessage(self,type,*args,**kwargs)->str:
-        if len(args) == 1:
-            content = args[0]
-        else:
-            content = kwargs
-        return json.dumps({"type":type,"content":content})
+    def MakeMessage(self,type,**kwargs)->str:
+        return json.dumps({"type":type,"content":kwargs})
 
     def ParseMessage(self,message_json)->Tuple[str,dict]:
         message = json.loads(message_json)
