@@ -13,11 +13,11 @@ from chatroom.client.request import Request
 
 class ChatroomClient:
     message_types = []
-    def __init__(self,host):
+    def __init__(self,host="ws://localhost:8765",start=False,log_prefix="client"):
         self._host = host
         self._topics:Dict[str,Topic] = {}
         self._client_id = None
-        self._logger = logger.Logger(logger.DEBUG)
+        self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self.request_pool:Dict[int,Request] = {}
         self.service_pool:Dict[str,Callable] = {}
 
@@ -25,7 +25,14 @@ class ChatroomClient:
         for message_type in ['hello','update','request','response']:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
 
-    def _ThreadedRun(self):
+        if start:
+            self.Start()
+
+    def __del__(self):
+        print("Client deleted")
+        self.Stop()
+
+    def _ThreadedStart(self):
         '''
         Run the client in a new thread
         '''
@@ -50,11 +57,12 @@ class ChatroomClient:
         '''
         self._ws = await websockets.connect(self._host)
 
-    def _Disconnect(self):
+    def Stop(self):
         '''
         Disconnect from the server
         '''
         asyncio.run(self._ws.close())
+        self.thread.join()
 
     async def _ReceivingLoop(self):
         '''
@@ -81,7 +89,8 @@ class ChatroomClient:
         '''
         Send a raw string to the server
         '''
-        self._sending_queue.put_nowait(message)
+        #self._sending_queue.put_nowait(message)
+        self._event_loop.call_soon_threadsafe(self._sending_queue.put_nowait,message)
 
     def SendToServer(self,*args,**kwargs):
         '''
@@ -130,12 +139,12 @@ class ChatroomClient:
     ================================
     '''
 
-    def Run(self):
+    def Start(self):
         '''
         Run the client
         '''
         self.connected_event =threading.Event()
-        self.thread = threading.Thread(target=self._ThreadedRun)
+        self.thread = threading.Thread(target=self._ThreadedStart)
         self.thread.daemon = True
         self.thread.start()
         self.connected_event.wait()

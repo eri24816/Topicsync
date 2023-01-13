@@ -5,6 +5,7 @@ Clients can also update a topic, which will be synced to all clients.
 '''
 
 import queue
+import threading
 from typing import Callable, Dict, Tuple
 import websockets
 import asyncio
@@ -28,20 +29,25 @@ class ChatroomServer:
         method.__self__._message_handlers[name] = method
         return method
 
-    def __init__(self):
+    def __init__(self,port=8765,start_thread = False, log_prefix = "Server"):
+        self._port = port
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
         self.client_id_count = count(1)
         self._clients : Dict[int,websockets.WebSocketServerProtocol] = {}
-        self._logger = logger.Logger(logger.DEBUG)
+        self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self._sending_queue = queue.Queue()
         self._request_pool : Dict[int,Request] = {}
         
         self._message_handlers:Dict[str,Callable] = {}
-        for message_type in ['request','response','register_service,'unregister_service']:
+        for message_type in ['request','response','register_service','unregister_service']:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
+        
+        self._thread = None
 
-        self._logger.Info("Chatroom server started")
+
+        if start_thread:
+            self.StartThread()
         
     async def HandleClient(self,client,path):
         '''
@@ -221,9 +227,33 @@ class ChatroomServer:
     ================================
     '''
     def Start(self):
-        start_server = websockets.serve(self.HandleClient, "localhost", 8765)
+        '''
+        Bloking function that starts the server
+        '''
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        start_server = websockets.serve(self.HandleClient, "localhost", self._port)
+        self._logger.Info("Chatroom server started")
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()
+
+    def StartThread(self):
+        '''
+        Starts the server in a new thread
+        '''
+        self._thread = threading.Thread(target=self.Start)
+        self._thread.daemon = True
+        self._thread.start()
+
+    def Stop(self):
+        '''
+        Stops the server
+        '''
+        if self._thread is not None:
+            self._thread.join()
+
+    def __del__(self):
+        print("Server deleted")
+        self.Stop()
 
 
 if __name__ == "__main__":

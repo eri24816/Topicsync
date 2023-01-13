@@ -1,7 +1,7 @@
 import chatroom
 import time
 client = chatroom.ChatroomClient("ws://localhost:8765")
-client.Run()
+client.Start()
 
 
 client.MakeRequest("echo",{'name':"eric"},lambda response: print('Got response',response))
