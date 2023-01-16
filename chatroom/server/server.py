@@ -20,19 +20,10 @@ from .service import Service, Request
 import json
 from itertools import count
 from chatroom import logger
+from chatroom.utils import MakeMessage, ParseMessage
+
 
 class ChatroomServer:
-    @staticmethod
-    def Handler(method, name=None):
-        '''
-        Decorator for a handler
-        '''
-        if name is None:
-            name = method.__name__
-            if name.startswith("_"):
-                name = name[1:]
-        method.__self__._message_handlers[name] = method
-        return method
 
     def __init__(self,port=8765,start_thread = False, log_prefix = "Server"):
         self._port = port
@@ -53,8 +44,12 @@ class ChatroomServer:
 
         if start_thread:
             self.StartThread()
+
+    def __del__(self):
+        print("Server deleted")
+        self.Stop()
         
-    async def HandleClient(self,client,path):
+    async def _HandleClient(self,client,path):
         '''
         Handle a client connection. 
         '''
@@ -66,7 +61,7 @@ class ChatroomServer:
 
             async for message in client:
                 self._logger.Debug(f"> {message}")
-                message_type, args = self.ParseMessage(message)
+                message_type, args = ParseMessage(message)
                 if message_type in self._message_handlers:
                     await self._message_handlers[message_type](client = client,**args)
                 else:
@@ -93,7 +88,7 @@ class ChatroomServer:
         '''
         Send a message to a client
         '''
-        await self._SendToClientRaw(client,self.MakeMessage(*args,**kwargs))
+        await self._SendToClientRaw(client,MakeMessage(*args,**kwargs))
 
     async def _SendToClients(self,clients,*args,**kwargs):
         '''
@@ -105,7 +100,7 @@ class ChatroomServer:
         await asyncio.gather(*corountines)
     '''
     ================================
-    Client API functions 
+    Internal API functions 
     ================================
     '''
 
@@ -200,13 +195,6 @@ class ChatroomServer:
     Helper functions
     ================================
     '''
-
-    def MakeMessage(self,message_type,**kwargs)->str:
-        return json.dumps({"type":message_type,"args":kwargs})
-
-    def ParseMessage(self,message_json)->Tuple[str,dict]:
-        message = json.loads(message_json)
-        return message["type"],message["args"]
     
     async def _MakeRequest(self,service_name,**args):
         '''
@@ -220,7 +208,7 @@ class ChatroomServer:
 
     '''
     ================================
-    Server functions
+    Public functions
     ================================
     '''
     def Start(self):
@@ -228,7 +216,7 @@ class ChatroomServer:
         Bloking function that starts the server
         '''
         asyncio.set_event_loop(asyncio.new_event_loop())
-        start_server = websockets.serve(self.HandleClient, "localhost", self._port)
+        start_server = websockets.serve(self._HandleClient, "localhost", self._port)
         self._logger.Info("Chatroom server started")
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()
@@ -247,11 +235,6 @@ class ChatroomServer:
         '''
         if self._thread is not None:
             self._thread.join()
-
-    def __del__(self):
-        print("Server deleted")
-        self.Stop()
-
 
 if __name__ == "__main__":
     chat_room = ChatroomServer()

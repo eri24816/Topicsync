@@ -10,6 +10,7 @@ import threading
 
 from chatroom.client.topic import StringTopic, Topic
 from chatroom.client.request import Request
+from chatroom.utils import MakeMessage, ParseMessage
 
 class ChatroomClient:
     message_types = []
@@ -62,7 +63,7 @@ class ChatroomClient:
         '''
         async for message in self._ws:
             self._logger.Debug(f"> {message}")  
-            message_type,args = self.ParseMessage(message)
+            message_type,args = ParseMessage(message)
             if message_type in self._message_handlers:
                 self._message_handlers[message_type](**args)
             else:
@@ -87,12 +88,12 @@ class ChatroomClient:
         '''
         Send a message to the server
         '''
-        message = self.MakeMessage(*args,**kwargs)
+        message = MakeMessage(*args,**kwargs)
         self._SendToServerRaw(message)
 
     '''
     ================================
-    Client API receive functions
+    Internal API functions
     ================================
     '''
 
@@ -153,17 +154,11 @@ class ChatroomClient:
         asyncio.run(self._ws.close())
         self.thread.join()
 
-    def GetID(self):
-        '''
-        Get the client ID
-        '''
-        return self._client_id
-
     T = TypeVar('T',bound=Topic)
     def RegisterTopic(self,type:Type[T],topic_name)->T:
         '''
         Returns a topic object for user-side use.
-        The method will send "register_topic" to the server if the topic is not in the client yet.
+        The method will send "subscribe" message to the server if the topic is not in the client yet.
         If the topic is already created in the server, the server will send an update message to the client.
         If the topic is not created in the server, the server will create the topic and send an update message to the client.
         Note that the newly created topic will have a default value until the server sends back the update message.
@@ -210,27 +205,10 @@ class ChatroomClient:
         '''
         self._SendToServer("update",topic_name=topic_name,change=change)
 
-    def Subscribe(self,topic_name,type): #? deprecated?
-        '''
-        Subscribe to a topic
-        '''
-        self._SendToServer("subscribe",topic_name=topic_name,type=type)
-
     def Unsubscribe(self,topic_name):
         '''
         Unsubscribe from a topic
         '''
         self._SendToServer("unsubscribe",topic_name=topic_name)
+        self._topics.pop(topic_name)
 
-    '''
-    ================================
-    Helper functions
-    ================================
-    '''
-
-    def MakeMessage(self,message_type,**kwargs)->str:
-        return json.dumps({"type":message_type,"args":kwargs})
-
-    def ParseMessage(self,message_json)->Tuple[str,dict]:
-        message = json.loads(message_json)
-        return message["type"],message["args"]
