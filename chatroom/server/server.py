@@ -179,7 +179,7 @@ class ChatroomServer:
         if f'_chatroom/validate_change/{topic_name}' in self._services:
             response = await self._MakeRequest(f'_chatroom/validate_change/{topic_name}',change=change)
             if not response['valid']:
-                await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=response['reason'])
+                await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=response['reason'] if 'reason' in response else 'unknown')
                 return
 
         topic = self._topics[topic_name]
