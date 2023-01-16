@@ -8,6 +8,7 @@ from collections import defaultdict
 import queue
 import threading
 from typing import Callable, Dict, List, Tuple
+import uuid
 import websockets
 import asyncio
 
@@ -113,9 +114,7 @@ class ChatroomServer:
         Request a service. The server forwards the request to the service provider.
         '''
         # forward the request to the service provider, and wait for the response
-        service = self._services[service_name]
-        await self._SendToClient(service.provider,"request",service_name=service_name,args=args,request_id=request_id)
-        response = await self._evnt.Wait(f'response_waiter{request_id}')
+        response = await self._MakeRequest(service_name=service_name,**args)
 
         # forward the response back to the client
         await self._SendToClient(client,"response",response=response,request_id=request_id)
@@ -175,7 +174,13 @@ class ChatroomServer:
         if topic_name not in self._topics:
             self._logger.Error(f"Topic {topic_name} does not exist")
             return
-        #TODO: validate change
+        
+        # validate the change
+        if f'_chatroom/validate_change/{topic_name}' in self._services:
+            response = await self._MakeRequest(f'_chatroom/validate_change/{topic_name}',change=change)
+            if not response['valid']:
+                await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=response['reason'])
+                return
 
         topic = self._topics[topic_name]
         topic.ApplyChange(change)
@@ -202,6 +207,16 @@ class ChatroomServer:
     def ParseMessage(self,message_json)->Tuple[str,dict]:
         message = json.loads(message_json)
         return message["type"],message["args"]
+    
+    async def _MakeRequest(self,service_name,**args):
+        '''
+        Send a request to a service provider and wait for the response
+        '''
+        provider = self._services[service_name].provider
+        request_id = str(uuid.uuid4())
+        await self._SendToClient(provider,"request",service_name=service_name,args=args,request_id=request_id)
+        response = await self._evnt.Wait(f'response_waiter{request_id}')
+        return response
 
     '''
     ================================

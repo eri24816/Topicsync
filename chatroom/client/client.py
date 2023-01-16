@@ -1,5 +1,5 @@
 import queue
-import random
+import uuid
 from typing import Callable, Dict, List, Tuple, Type, TypeVar
 import websockets
 import asyncio
@@ -13,16 +13,16 @@ from chatroom.client.request import Request
 
 class ChatroomClient:
     message_types = []
-    def __init__(self,host="ws://localhost:8765",start=False,log_prefix="client"):
-        self._host = host
+    def __init__(self,host="localhost",port=8765,start=False,log_prefix="client"):
+        self._host = f'ws://{host}:{port}'
         self._topics:Dict[str,Topic] = {}
         self._client_id = None
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
-        self.request_pool:Dict[int,Request] = {}
+        self.request_pool:Dict[str,Request] = {}
         self.service_pool:Dict[str,Callable] = {}
 
         self._message_handlers:Dict[str,Callable] = {}
-        for message_type in ['hello','update','request','response']:
+        for message_type in ['hello','update','request','response','reject_update']:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
 
         if start:
@@ -123,6 +123,13 @@ class ChatroomClient:
         request = self.request_pool.pop(request_id)
         request.on_response(response)
 
+    def _reject_update(self,topic_name,change,reason):
+        '''
+        Handle a rejected update from the server
+        '''
+        self._logger.Warning(f"Update rejected for topic {topic_name}: {reason}")
+        self._topics[topic_name].UpdateRejected(change)
+
     '''
     ================================
     Public functions
@@ -180,9 +187,9 @@ class ChatroomClient:
 
     def MakeRequest(self,service_name:str,args:Dict,on_response:Callable):
         '''
-        Request a service from another client
+        Request a service from another client. Does not wait for the response.
         '''
-        id = random.randint(0,1000000)
+        id = str(uuid.uuid4())
         request = Request(id,on_response)
         self.request_pool[id] = request
         self._SendToServer("request",service_name=service_name,args=args,request_id=id)

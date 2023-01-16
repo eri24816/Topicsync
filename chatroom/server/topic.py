@@ -6,7 +6,7 @@ def GuessType(value):
         return 'string'
     return 'string'
 
-def CreateTopic(name,value=None,type=None):
+def CreateTopic(name,type=None,value=None):
     if type is None:
         type = GuessType(value)
     if type == 'string':
@@ -42,6 +42,8 @@ class Topic:
 class StringTopic(Topic):
     def __init__(self,name,value):
         super().__init__(name,value)
+        if value is None:
+            self._value = ''
 
     def ApplyChange(self,change:Dict):
         if change['type'] == 'set':

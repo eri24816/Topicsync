@@ -17,7 +17,6 @@ class Topic(metaclass = abc.ABCMeta):
         self.client = client
         self._name = name
         self._value = None
-        self._display_value = None
         self._preview_changes : Dict[int,Change] = {}
         self._preview_path : Deque[Change] = deque()
         
@@ -37,7 +36,7 @@ class Topic(metaclass = abc.ABCMeta):
         return camel_to_snake(self.__class__.__name__.replace('Topic',''))
     
     def GetValue(self):
-        return self._display_value
+        return self._value
     
     def AddSetListener(self, listener):
         self._set_listeners.append(listener)
@@ -76,7 +75,7 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Set the display value and notify listeners
         '''
-        self._display_value = change.Apply(self._display_value)
+        self._value = change.Apply(self._value)
         self._NotifyListeners(change)
 
     '''
@@ -108,12 +107,20 @@ class Topic(metaclass = abc.ABCMeta):
             self._ChangeDisplayValue(change) # apply the new change
             return
         
+    def UpdateRejected(self, change_dict):
+        # if the change is rejected by server, the change and all preview changes after it should be reversed.
+        if self._preview_path[0].id == change_dict['id']:
+            while len(self._preview_path)>0:
+                self._ChangeDisplayValue(self._preview_path.pop().Inverse())
+        
 class StringTopic(Topic):
     '''
     StringTopic is a topic that has a string value.
     '''
     def __init__(self,name,client:ChatroomClient):
         super().__init__(name,client)
+        if self._value is None:
+            self._value = ''
         self._set_listeners : List[Callable[[str],None]] = []
 
     def _NotifyListeners(self,change:ChangeSet):
