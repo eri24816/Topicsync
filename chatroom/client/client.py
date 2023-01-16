@@ -1,6 +1,6 @@
 import queue
 import random
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Type, TypeVar
 import websockets
 import asyncio
 import json
@@ -8,7 +8,7 @@ from collections import defaultdict
 from chatroom import logger
 import threading
 
-from chatroom.client.topic import Topic, TopicChange
+from chatroom.client.topic import StringTopic, Topic
 from chatroom.client.request import Request
 
 class ChatroomClient:
@@ -43,7 +43,6 @@ class ChatroomClient:
         self._event_loop.run_until_complete(self._Run())
         self._event_loop.run_forever()
         
-
     async def _Run(self):
         '''
         Run send and receive loops
@@ -57,22 +56,15 @@ class ChatroomClient:
         '''
         self._ws = await websockets.connect(self._host)
 
-    def Stop(self):
-        '''
-        Disconnect from the server
-        '''
-        asyncio.run(self._ws.close())
-        self.thread.join()
-
     async def _ReceivingLoop(self):
         '''
         Receiving loop
         '''
         async for message in self._ws:
             self._logger.Debug(f"> {message}")  
-            message_type,content = self.ParseMessage(message)
+            message_type,args = self.ParseMessage(message)
             if message_type in self._message_handlers:
-                self._message_handlers[message_type](**content)
+                self._message_handlers[message_type](**args)
             else:
                 self._logger.Warning(f"Unknown message type {message_type}")
 
@@ -85,19 +77,19 @@ class ChatroomClient:
             await self._ws.send(message)
             self._logger.Debug(f"< {message}")
 
-    def SendToServerRaw(self,message):
+    def _SendToServerRaw(self,message):
         '''
         Send a raw string to the server
         '''
         #self._sending_queue.put_nowait(message)
         self._event_loop.call_soon_threadsafe(self._sending_queue.put_nowait,message)
 
-    def SendToServer(self,*args,**kwargs):
+    def _SendToServer(self,*args,**kwargs):
         '''
         Send a message to the server
         '''
         message = self.MakeMessage(*args,**kwargs)
-        self.SendToServerRaw(message)
+        self._SendToServerRaw(message)
 
     '''
     ================================
@@ -112,19 +104,18 @@ class ChatroomClient:
         self._client_id = id
         self._logger.Info(f"Connected to server as client {self._client_id}")
 
-    def _update(self,topic_name,change,source):
+    def _update(self,topic_name,change):
         '''
         Handle an update message from the server
         '''
-        change = TopicChange(change)
-        self._topics[topic_name].Update(change,source)
+        self._topics[topic_name].Update(change) # The topic will handle the update and call the callbacks
 
     def _request(self,service_name,args,request_id):
         '''
         Handle a request from another client
         '''
         response = self.service_pool[service_name](**args)
-        self.SendToServer("response",response = response,request_id = request_id)
+        self._SendToServer("response",response = response,request_id = request_id)
 
     def _response(self,request_id,response):
         '''
@@ -148,6 +139,13 @@ class ChatroomClient:
         self.thread.daemon = True
         self.thread.start()
         self.connected_event.wait()
+    
+    def Stop(self):
+        '''
+        Disconnect from the server
+        '''
+        asyncio.run(self._ws.close())
+        self.thread.join()
 
     def GetID(self):
         '''
@@ -155,45 +153,31 @@ class ChatroomClient:
         '''
         return self._client_id
 
-    def AddTopicHandler(self,topic_name,handler):
+    T = TypeVar('T',bound=Topic)
+    def RegisterTopic(self,type:Type[T],topic_name)->T:
         '''
-        Add a handler for a topic
+        Returns a topic object for user-side use.
+        The method will send "register_topic" to the server if the topic is not in the client yet.
+        If the topic is already created in the server, the server will send an update message to the client.
+        If the topic is not created in the server, the server will create the topic and send an update message to the client.
+        Note that the newly created topic will have a default value until the server sends back the update message.
         '''
-        if topic_name not in self._topics:
-            topic = self._topics[topic_name] = Topic(self,topic_name)
-            topic.AddListener(handler)
-
-    def RemoveTopicHandler(self,topic_name,handler):
+        if topic_name in self._topics:
+            topic = self._topics[topic_name]
+            assert isinstance(topic,type)
+            return topic
+        
+        topic = type(topic_name,self)
+        
+        self._topics[topic_name] = topic
+        self._SendToServer("subscribe",topic_name=topic_name,type=topic.GetTypeName())
+        return topic
+    
+    def DeleteTopic(self,topic_name):
         '''
-        Remove a handler for a topic
+        Delete a topic
         '''
-        assert topic_name in self._topics
-        self._topics[topic_name].RemoveListener(handler)
-
-    def Publish(self,topic_name,value):
-        '''
-        Publish a topic
-        '''
-        self.SendToServer("publish",topic=topic_name,value=value)
-
-    # interface with Topic class
-    def TryPublish(self,topic:Topic,change:TopicChange):
-        '''
-        Try to update a topic
-        '''
-        self.SendToServer("try_publish",source=self.GetID(),topic=topic.GetName(),change=change.Serialize())
-
-    def Subscribe(self,topic_name):
-        '''
-        Subscribe to a topic
-        '''
-        self.SendToServer("subscribe",topic=topic_name)
-
-    def Unsubscribe(self,topic_name):
-        '''
-        Unsubscribe from a topic
-        '''
-        self.SendToServer("unsubscribe",topic=topic_name)
+        self._SendToServer("delete_topic",topic_name=topic_name)
 
     def MakeRequest(self,service_name:str,args:Dict,on_response:Callable):
         '''
@@ -202,7 +186,7 @@ class ChatroomClient:
         id = random.randint(0,1000000)
         request = Request(id,on_response)
         self.request_pool[id] = request
-        self.SendToServer("request",service_name=service_name,args=args,request_id=id)
+        self._SendToServer("request",service_name=service_name,args=args,request_id=id)
         return request
 
     def RegisterService(self,service_name:str,service:Callable):
@@ -210,7 +194,27 @@ class ChatroomClient:
         Register a service
         '''
         self.service_pool[service_name] = service
-        self.SendToServer("register_service",service_name=service_name)
+        self._SendToServer("register_service",service_name=service_name)
+
+    # called by the topic class =================================
+
+    def Update(self,topic_name,change):
+        '''
+        Update a topic
+        '''
+        self._SendToServer("update",topic_name=topic_name,change=change)
+
+    def Subscribe(self,topic_name,type): #? deprecated?
+        '''
+        Subscribe to a topic
+        '''
+        self._SendToServer("subscribe",topic_name=topic_name,type=type)
+
+    def Unsubscribe(self,topic_name):
+        '''
+        Unsubscribe from a topic
+        '''
+        self._SendToServer("unsubscribe",topic_name=topic_name)
 
     '''
     ================================
@@ -218,9 +222,9 @@ class ChatroomClient:
     ================================
     '''
 
-    def MakeMessage(self,type,**kwargs)->str:
-        return json.dumps({"type":type,"content":kwargs})
+    def MakeMessage(self,message_type,**kwargs)->str:
+        return json.dumps({"type":message_type,"args":kwargs})
 
     def ParseMessage(self,message_json)->Tuple[str,dict]:
         message = json.loads(message_json)
-        return message["type"],message["content"]
+        return message["type"],message["args"]

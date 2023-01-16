@@ -1,7 +1,14 @@
 from typing import Dict
+from chatroom.topic_change import Change
 
+def GuessType(value):
+    if isinstance(value,str):
+        return 'string'
+    return 'string'
 
-def CreateTopic(name,type,value):
+def CreateTopic(name,value=None,type=None):
+    if type is None:
+        type = GuessType(value)
     if type == 'string':
         return StringTopic(name,value)
     raise Exception(f"Unknown topic type {type}")
@@ -13,11 +20,9 @@ class Topic:
         self._version = 0
         self._subscribers = set()
 
-    def ApplyChange(self,change:Dict):
-        if change['type'] == 'set':
-            self._value = change['value']
-            return True
-        return False
+    def ApplyChange(self,change_dict:Dict):
+        change = Change.Deserialize(change_dict)
+        self._value = change.Apply(self._value)
 
     def AddSubscriber(self,subscriber):
         self._subscribers.add(subscriber)

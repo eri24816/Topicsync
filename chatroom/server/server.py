@@ -12,6 +12,7 @@ import websockets
 import asyncio
 
 from chatroom.server.event_manager import EventManager
+from chatroom.topic_change import ChangeSet
 
 from .topic import CreateTopic, Topic
 from .service import Service, Request
@@ -40,12 +41,10 @@ class ChatroomServer:
         self._clients : Dict[int,websockets.WebSocketServerProtocol] = {}
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self._sending_queue = queue.Queue()
-        #self._request_pool : Dict[int,Request] = {}
         self._evnt = EventManager()
-        self._pre_subscriptions : Dict[str,List[int]] = defaultdict(list) # subscriptions that are made before the topic is created
         
         self._message_handlers:Dict[str,Callable] = {}
-        for message_type in ['request','response','register_service','unregister_service','try_update']:
+        for message_type in ['request','response','register_service','unregister_service','subscribe','update','unsubscribe']:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
         
         self._thread = None
@@ -62,33 +61,19 @@ class ChatroomServer:
             client_id = next(self.client_id_count)
             self._clients[client_id] = client
             self._logger.Info(f"Client {client_id} connected")
-            await self.SendToClient(client,"hello",id=client_id)
+            await self._SendToClient(client,"hello",id=client_id)
             #await self.Publish("_chatroom/server_status",f"[info] Client {client_id} connected")
             #await self.Publish(f"_chatroom/client_message/{client_id}",f"[info] Client {client_id} connected")
 
             async for message in client:
                 self._logger.Debug(f"> {message}")
-                message_type, content = self.ParseMessage(message)
+                message_type, args = self.ParseMessage(message)
                 if message_type in self._message_handlers:
-                    await self._message_handlers[message_type](client = client,**content)
+                    await self._message_handlers[message_type](client = client,**args)
                 else:
                     self._logger.Error(f"Unknown message type: {message_type}")
                     pass
-                    #await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
-                # if message_type == "publish":
-                #     await self.Publish(content["topic"],content["value"])
-                # elif message_type == "subscribe":
-                #     await self.Subscribe(client,content["topic"])
-                # elif message_type == "unsubscribe":
-                #     await self.Unsubscribe(client,content["topic"])
-                # elif message_type == "try_publish":
-                #     await self.TryPublish(client_id,content["topic"],content["change"])
-                # elif message_type == "call":
-                #     await self.Service(client,content["service"],content["command"],content["args"])
-                # elif message_type == "response":
-                #     await self.response(content["service"],content["data"])
-                # else:
-                #     await self.Publish(f"__client_message__/{client_id}",f"[error] Unknown message type: {message['type']}")
+
         except websockets.exceptions.ConnectionClosed as e:
             print(e)
             self._logger.Info(f"Client {client_id} disconnected")
@@ -99,18 +84,27 @@ class ChatroomServer:
                     topic.RemoveSubscriber(client)
             del self._clients[client_id]
 
-    async def SendToClientRaw(self,client,message):
+    async def _SendToClientRaw(self,client,message):
         '''
         Send a message to a client
         '''
         await client.send(message)
         self._logger.Debug(f"< {message}")
 
-    async def SendToClient(self,client,*args,**kwargs):
+    async def _SendToClient(self,client,*args,**kwargs):
         '''
         Send a message to a client
         '''
-        await self.SendToClientRaw(client,self.MakeMessage(*args,**kwargs))
+        await self._SendToClientRaw(client,self.MakeMessage(*args,**kwargs))
+
+    async def _SendToClients(self,clients,*args,**kwargs):
+        '''
+        Send a message to a list of clients
+        '''
+        corountines = []
+        for subscriber in clients:
+            corountines.append(self._SendToClient(subscriber,*args,**kwargs))
+        await asyncio.gather(*corountines)
     '''
     ================================
     Client API functions 
@@ -123,11 +117,11 @@ class ChatroomServer:
         '''
         # forward the request to the service provider, and wait for the response
         service = self._services[service_name]
-        await self.SendToClient(service.provider,"request",service_name=service_name,args=args,request_id=request_id)
+        await self._SendToClient(service.provider,"request",service_name=service_name,args=args,request_id=request_id)
         response = await self._evnt.Wait(f'response_waiter{request_id}')
-        
+
         # forward the response back to the client
-        await self.SendToClient(client,"response",response=response,request_id=request_id)
+        await self._SendToClient(client,"response",response=response,request_id=request_id)
 
     async def _response(self,client,response,request_id):
         '''
@@ -147,76 +141,57 @@ class ChatroomServer:
             return
         del self._services[service_name]
 
-    async def _create_topic(self,client,topic_name,type,value):
+    async def _subscribe(self,client,topic_name,type):
         '''
-        Create a new topic
+        The client wants to access a topic. 
+        Since the client may not know if the topic exists, the server creates the topic if it's not. 
+        The new topic's type is determined with the type argument provided in this message.
+        After the topic is created (or if it already exists), the client is subscribed to the topic.
         '''
-        # create the topic
-        if topic_name in self._topics:
-            self._logger.Error(f"Topic {topic_name} already exists")
-            return
-        topic = self._topics[topic_name] = CreateTopic(topic_name,type,value)
+        #TODO: validate creation
+        
+        if topic_name not in self._topics:
+            # create the topic
+            topic = self._topics[topic_name] = CreateTopic(topic_name,type)
+            self._logger.Info(f"Created topic {topic_name} of type {type}")
 
-        # subscribe all pre-subscribers
-        if topic_name in self._pre_subscriptions:
-            for subscriber in self._pre_subscriptions.pop(topic_name):
-                topic_name.AddSubscriber(subscriber)
+            # subscribe the client to the topic
+            topic.AddSubscriber(client)
 
-        self._logger.Info(f"Created topic {topic_name} of type {type} with value {value}")
+            # since the topic has no value yet, no update is sent to the client
+        else:
+            topic = self._topics[topic_name]
 
-    async def _try_update(self,client,topic_name,change):
+            # subscribe the client to the topic and send the current value to the client
+            topic.AddSubscriber(client)
+            await self._SendToClient(client,"update",topic_name=topic_name,change=ChangeSet(topic.Getvalue()).Serialize())
+
+    #TODO async def _delete_topic(self,client,topic_name):
+
+    async def _update(self,client,topic_name,change):
         '''
         Try to update a topic. The server first request the '_chatroom/validate_change' service to validate the change, then
         - forwards the update to all subscribers, if the change is valid
         - sends 'reject_update' message to the client, if the change is invalid
-        If there is no '_chatroom/validate_change' service, the server will always accept the change.
+        If there is no '_chatroom/validate_change' service registered, the server will always accept the change.
         '''
         if topic_name not in self._topics:
-            self._logger.Debug(f"Creating new topic {topic_name}.")
-            self._topics[topic_name] = Topic(topic_name,change["value"])
+            self._logger.Error(f"Topic {topic_name} does not exist")
+            return
+        #TODO: validate change
 
-    async def Publish(self,topic_name,change): 
-        '''
-        Publish a topic and send the new value to all subscribers
-        '''
-        #TODO: check client version > current version
-        
-        if topic_name not in self._topics:
-            assert change["type"] == "raw"
-            topic = self._topics[topic_name] = Topic(topic_name,change["value"])
-        else:
-            topic = self._topics[topic_name]
-            topic.Update(value)
-        for subscriber in topic.GetSubscribers():
-            await self.SendToClient(subscriber,"update",topic=topic_name,value=topic.Getvalue())
-
-    async def Subscribe(self,client,topic_name):
-        '''
-        Add a client to a topic and send the current value to the client
-        '''
-        if topic_name not in self._topics:
-            self._topics[topic_name] = Topic(topic_name,None)
         topic = self._topics[topic_name]
-        topic.AddSubscriber(client)
-        await self.SendToClient(client,"update",topic=topic_name,value=topic.Getvalue())
+        topic.ApplyChange(change)
 
-    async def Unsubscribe(self,client,topic_name):
+        # notify all subscribers
+        await self._SendToClients(topic.GetSubscribers(),"update",topic_name=topic_name,change=change)
+
+    async def _unsubscribe(self,client,topic_name):
         '''
         Remove a client from a topic
         '''
         topic = self._topics[topic_name]
         topic.RemoveSubscriber(client)
-
-    async def TryPublish(self,source,topic_name,change):
-        '''
-        
-        '''
-        publish_validation_service_name = f"_chatroom/topic_validation/{topic_name}"
-        if publish_validation_service_name in self._services: # if there is a validator registered
-            # ask the validator to validate the change
-            await self._services[publish_validation_service_name].Request(source,change)
-        else: # no validator registered. publish directly
-            await self.Publish(topic_name,change)
 
     '''
     ================================
@@ -224,12 +199,12 @@ class ChatroomServer:
     ================================
     '''
 
-    def MakeMessage(self,type,**kwargs)->str:
-        return json.dumps({"type":type,"content":kwargs})
+    def MakeMessage(self,message_type,**kwargs)->str:
+        return json.dumps({"type":message_type,"args":kwargs})
 
     def ParseMessage(self,message_json)->Tuple[str,dict]:
         message = json.loads(message_json)
-        return message["type"],message["content"]
+        return message["type"],message["args"]
 
     '''
     ================================
