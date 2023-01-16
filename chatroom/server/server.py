@@ -62,8 +62,6 @@ class ChatroomServer:
             self._clients[client_id] = client
             self._logger.Info(f"Client {client_id} connected")
             await self._SendToClient(client,"hello",id=client_id)
-            #await self.Publish("_chatroom/server_status",f"[info] Client {client_id} connected")
-            #await self.Publish(f"_chatroom/client_message/{client_id}",f"[info] Client {client_id} connected")
 
             async for message in client:
                 self._logger.Debug(f"> {message}")
@@ -77,7 +75,6 @@ class ChatroomServer:
         except websockets.exceptions.ConnectionClosed as e:
             print(e)
             self._logger.Info(f"Client {client_id} disconnected")
-            #await self.Publish("_chatroom/server_status",f"[info] Client {client_id} disconnected")
             # clear subscriptions
             for topic in self._topics.values():
                 if client in topic.GetSubscribers():

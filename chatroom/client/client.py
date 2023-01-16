@@ -81,7 +81,6 @@ class ChatroomClient:
         '''
         Send a raw string to the server
         '''
-        #self._sending_queue.put_nowait(message)
         self._event_loop.call_soon_threadsafe(self._sending_queue.put_nowait,message)
 
     def _SendToServer(self,*args,**kwargs):
