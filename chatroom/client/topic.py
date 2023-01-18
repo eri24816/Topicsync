@@ -5,7 +5,7 @@ from typing import Callable, List, TYPE_CHECKING
 from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
-from chatroom.topic_change import Change, ChangeSet
+from chatroom.topic_change import Change, SetChange
 import abc
 
 def camel_to_snake(name):
@@ -50,7 +50,7 @@ class Topic(metaclass = abc.ABCMeta):
         This is a basic topic-changing method that all topic types support. For different types of topics, there can be more topic-changing method.
         All topic-changing methods should summon a Change and call _UpdateByUser to send the change to server and setup the preview.
         '''
-        change = ChangeSet(value)
+        change = SetChange(value)
         self._UpdateByUser(change)
         
     '''
@@ -123,6 +123,21 @@ class StringTopic(Topic):
             self._value = ''
         self._set_listeners : List[Callable[[str],None]] = []
 
-    def _NotifyListeners(self,change:ChangeSet):
+    def _NotifyListeners(self,change:SetChange):
         for listener in self._set_listeners:
             listener(change.value)
+
+class ListTopic(Topic):
+    '''
+    ListTopic is a topic that has a list value.
+    '''
+    def __init__(self,name,client:ChatroomClient):
+        super().__init__(name,client)
+        if self._value is None:
+            self._value = []
+        self._set_listeners : List[Callable[[List],None]] = []
+
+    def _NotifyListeners(self,change:SetChange):
+        for listener in self._set_listeners:
+            listener(change.value)
+        

@@ -13,7 +13,7 @@ import websockets
 import asyncio
 
 from chatroom.server.event_manager import EventManager
-from chatroom.topic_change import ChangeSet
+from chatroom.topic_change import SetChange
 
 from .topic import CreateTopic, Topic
 from .service import Service, Request
@@ -155,7 +155,7 @@ class ChatroomServer:
 
             # subscribe the client to the topic and send the current value to the client
             topic.AddSubscriber(client)
-            await self._SendToClient(client,"update",topic_name=topic_name,change=ChangeSet(topic.Getvalue()).Serialize())
+            await self._SendToClient(client,"update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
     #TODO async def _delete_topic(self,client,topic_name):
 

@@ -16,7 +16,7 @@ class Change:
     @staticmethod
     def Deserialize(data):
         if data["type"] == "set":
-            return ChangeSet(**remove_entry(data,'type'))
+            return SetChange(**remove_entry(data,'type'))
         raise Exception(f"Unknown change type {data['type']}")
     def __init__(self,id=None):
         if id is None:
@@ -33,7 +33,7 @@ class Change:
         '''
         return Change()
     
-class ChangeSet(Change):
+class SetChange(Change):
     def __init__(self, value,old_value=None,id=None):
         super().__init__(id)
         self.value = value
@@ -44,5 +44,30 @@ class ChangeSet(Change):
     def Serialize(self):
         return {"type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
     def Inverse(self)->Change:
-        return ChangeSet(self.old_value,self.value)
+        return SetChange(self.old_value,self.value)
     
+class AppendChange(Change):
+    '''
+    Append a value to a list. Apply() will append the value to the list inplace and return the list.
+    '''
+    def __init__(self, item,id=None):
+        super().__init__(id)
+        self.item = item
+    def Apply(self, old_value):
+        old_value.append(self.item)
+        return old_value
+    def Inverse(self)->Change:
+        return RemoveChange(self.item)
+    
+class RemoveChange(Change):
+    '''
+    Remove a value from a list. Apply() will remove the value from the list inplace and return the list.
+    '''
+    def __init__(self, item,id=None):
+        super().__init__(id)
+        self.item = item
+    def Apply(self, old_value):
+        old_value.remove(self.item)
+        return old_value
+    def Inverse(self)->Change:
+        return AppendChange(self.item)

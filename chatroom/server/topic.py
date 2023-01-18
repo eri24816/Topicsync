@@ -6,12 +6,20 @@ def GuessType(value):
         return 'string'
     return 'string'
 
+default_topic_value = {
+    'string':'',
+    'int':0,
+    'float':0.0,
+    'bool':False,
+    'list':[],
+}
+
 def CreateTopic(name,type=None,value=None):
-    if type is None:
-        type = GuessType(value)
-    if type == 'string':
-        return StringTopic(name,value)
-    raise Exception(f"Unknown topic type {type}")
+    if value is None:
+        if type is None:
+            type = GuessType(value)
+        value = default_topic_value[type]
+    return Topic(name,value)
 
 class Topic:
     def __init__(self,name,value):
@@ -38,16 +46,3 @@ class Topic:
 
     def GetSubscribers(self):
         return self._subscribers
-
-class StringTopic(Topic):
-    def __init__(self,name,value):
-        super().__init__(name,value)
-        if value is None:
-            self._value = ''
-
-    def ApplyChange(self,change:Dict):
-        if change['type'] == 'set':
-            self._value = change['value']
-            return True
-        #TODO: add other change types
-        return False
