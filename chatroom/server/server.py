@@ -238,5 +238,5 @@ class ChatroomServer:
             self._thread.join()
 
 if __name__ == "__main__":
-    chat_room = ChatroomServer()
-    chat_room.Start()
+    chatroom = ChatroomServer()
+    chatroom.Start()
