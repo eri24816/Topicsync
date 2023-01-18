@@ -1,10 +1,5 @@
 from typing import Dict
-from chatroom.topic_change import Change
-
-def GuessType(value):
-    if isinstance(value,str):
-        return 'string'
-    return 'string'
+from chatroom.topic_change import Change, DeserializeChange
 
 default_topic_value = {
     'string':'',
@@ -14,22 +9,24 @@ default_topic_value = {
     'list':[],
 }
 
-def CreateTopic(name,type=None,value=None):
+def CreateTopic(name,type:str,value=None):
     if value is None:
-        if type is None:
-            type = GuessType(value)
         value = default_topic_value[type]
-    return Topic(name,value)
+    return Topic(name,value,type)
 
 class Topic:
-    def __init__(self,name,value):
+    '''
+    The topic class at server side code.
+    '''
+    def __init__(self,name,value,type):
         self._name = name
         self._value = value
         self._version = 0
         self._subscribers = set()
+        self._type = type
 
     def ApplyChange(self,change_dict:Dict):
-        change = Change.Deserialize(change_dict)
+        change = DeserializeChange(self._type,change_dict)
         self._value = change.Apply(self._value)
 
     def AddSubscriber(self,subscriber):

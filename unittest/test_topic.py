@@ -43,7 +43,7 @@ class TestTopic(unittest.TestCase):
         b1 = client1.RegisterTopic(StringTopic, "b")
         b2 = client2.RegisterTopic(StringTopic, "b")
 
-        a2.AddSetListener(lambda x: b2.Set(x + " world"))
+        a2.on_set += lambda x: b2.Set(x + " world")
         a1.Set("hello")
         time.sleep(0.1)
         self.assertEqual(b1.GetValue(), "hello world")

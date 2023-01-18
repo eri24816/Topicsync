@@ -1,15 +1,13 @@
 from __future__ import annotations
 from collections import deque
-from typing import Deque, Dict
+from typing import Deque, Dict, Tuple
 from typing import Callable, List, TYPE_CHECKING
 from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
-from chatroom.topic_change import Change, SetChange
+from chatroom.topic_change import DeserializeChange, Change, StringChangeTypes, UListChangeTypes
+from chatroom.utils import Action, ActionGroup, camel_to_snake
 import abc
-
-def camel_to_snake(name):
-    return ''.join(['_'+c.lower() if c.isupper() else c for c in name]).lstrip('_')
 
 class Topic(metaclass = abc.ABCMeta):
 
@@ -19,8 +17,6 @@ class Topic(metaclass = abc.ABCMeta):
         self._value = None
         self._preview_changes : Dict[int,Change] = {}
         self._preview_path : Deque[Change] = deque()
-        
-        self._set_listeners : List[Callable] = []
 
     def __del__(self):
         self.client.Unsubscribe(self._name)
@@ -37,21 +33,6 @@ class Topic(metaclass = abc.ABCMeta):
     
     def GetValue(self):
         return self._value
-    
-    def AddSetListener(self, listener):
-        self._set_listeners.append(listener)
-
-    def RemoveSetListener(self, listener):
-        self._set_listeners.remove(listener)
-    # child classes (other types of topics) will allow more change types thus more Add/Remove methods
-    
-    def Set(self, value):
-        '''
-        This is a basic topic-changing method that all topic types support. For different types of topics, there can be more topic-changing method.
-        All topic-changing methods should summon a Change and call _UpdateByUser to send the change to server and setup the preview.
-        '''
-        change = SetChange(value)
-        self._UpdateByUser(change)
         
     '''
     Private methods
@@ -92,7 +73,7 @@ class Topic(metaclass = abc.ABCMeta):
     '''
     def Update(self, change_dict):
 
-        change = Change.Deserialize(change_dict) # first obtain the change object
+        change = DeserializeChange(self.GetTypeName(),change_dict) # first obtain the change object
 
         if len(self._preview_path)>0 and change.id == self._preview_path[0].id: 
             # if the oldest previewing change is approved by server
@@ -121,11 +102,21 @@ class StringTopic(Topic):
         super().__init__(name,client)
         if self._value is None:
             self._value = ''
-        self._set_listeners : List[Callable[[str],None]] = []
+        self.on_set = Action()
+    
+    def Set(self, value):
+        '''
+        This is a basic topic-changing method that all topic types support. For different types of topics, there can be more topic-changing method.
+        All topic-changing methods should summon a Change and call _UpdateByUser to send the change to server and setup the preview.
+        '''
+        change = StringChangeTypes.SetChange(value)
+        self._UpdateByUser(change)
 
-    def _NotifyListeners(self,change:SetChange):
-        for listener in self._set_listeners:
-            listener(change.value)
+    def _NotifyListeners(self,change:Change):
+        if isinstance(change,StringChangeTypes.SetChange):
+            self.on_set(change.value)
+        else:
+            raise Exception(f'Unknown change type {type(change)}')
 
 class ListTopic(Topic):
     '''
@@ -135,9 +126,15 @@ class ListTopic(Topic):
         super().__init__(name,client)
         if self._value is None:
             self._value = []
-        self._set_listeners : List[Callable[[List],None]] = []
+        self.on_set = Action()
+        self.on_append_remove = ActionGroup(2)
 
-    def _NotifyListeners(self,change:SetChange):
-        for listener in self._set_listeners:
-            listener(change.value)
-        
+    def _NotifyListeners(self,change:Change):
+        if isinstance(change,UListChangeTypes.SetChange):
+            self.on_set(change.value)
+        elif isinstance(change,UListChangeTypes.AppendChange):
+            self.on_append_remove[0](change.item)
+        elif isinstance(change,UListChangeTypes.RemoveChange):
+            self.on_append_remove[1](change.item)
+        else:
+            raise Exception('Unknown change type')

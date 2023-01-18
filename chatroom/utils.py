@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Tuple
+from typing import Any, Callable, List, Tuple, Union
 
 class EventWithData(asyncio.Event):
     def __init__(self):
@@ -25,3 +25,50 @@ def MakeMessage(message_type,**kwargs)->str:
 def ParseMessage(message_json)->Tuple[str,dict]:
     message = json.loads(message_json)
     return message["type"],message["args"]
+
+class Action:
+    '''
+    A hub for callbacks
+    '''
+    def __init__(self):
+        self._callbacks:List[Callable] = []
+
+    def __add__(self,callback:Callable):
+        self._callbacks.append(callback)
+        return self
+    
+    def __sub__(self,callback:Callable):
+        self._callbacks.remove(callback)
+        return self
+    
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        '''Call each callback in the action with the given arguments.'''
+        for callback in self._callbacks:
+            callback(*args,**kwargs)
+
+class ActionGroup:
+    '''
+    A group of specific number of actions. When using _add_ or _sub_, you need to pass in a list of callbacks for each action.
+    '''
+    def __init__(self,n:int):
+        self._actions:List[Action] = [Action() for _ in range(n)]
+    
+    def __getitem__(self,index):
+        return self._actions[index]
+    
+    def __len__(self):
+        return len(self._actions)
+    
+    def __add__(self,callbacks:List[Callable]):
+        for action,callback in zip(self._actions,callbacks):
+            action += callback
+        return self
+    
+    def __sub__(self,callbacks:List[Callable]):
+        for action,callback in zip(self._actions,callbacks):
+            action -= callback
+        return self
+
+    
+def camel_to_snake(name):
+    return ''.join(['_'+c.lower() if c.isupper() else c for c in name]).lstrip('_')
