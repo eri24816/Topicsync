@@ -148,6 +148,7 @@ class ChatroomServer:
 
             # subscribe the client to the topic
             topic.AddSubscriber(client)
+            await self._SendToClient(client,"update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
             # since the topic has no value yet, no update is sent to the client
         else:

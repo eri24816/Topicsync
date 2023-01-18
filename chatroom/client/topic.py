@@ -6,7 +6,7 @@ from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
 from chatroom.topic_change import DeserializeChange, Change, StringChangeTypes, UListChangeTypes
-from chatroom.utils import Action, ActionGroup, camel_to_snake
+from chatroom.utils import Action, camel_to_snake
 import abc
 
 class Topic(metaclass = abc.ABCMeta):
@@ -56,15 +56,16 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Set the display value and notify listeners
         '''
+        old_value = self._value
         self._value = change.Apply(self._value)
-        self._NotifyListeners(change)
+        self._NotifyListeners(change,old_value=old_value,new_value=self._value)
 
     '''
     Abstract/virtual methods
     '''
 
     @abc.abstractmethod
-    def _NotifyListeners(self,change:Change):
+    def _NotifyListeners(self,change:Change, old_value, new_value):
         # notify user-side listeners for a topic change. Every listener type work differently. Override this method in child classes to notify listeners of different types.
         pass
 
@@ -96,45 +97,56 @@ class Topic(metaclass = abc.ABCMeta):
         
 class StringTopic(Topic):
     '''
-    StringTopic is a topic that has a string value.
+    String topic
     '''
     def __init__(self,name,client:ChatroomClient):
         super().__init__(name,client)
-        if self._value is None:
-            self._value = ''
         self.on_set = Action()
     
     def Set(self, value):
-        '''
-        This is a basic topic-changing method that all topic types support. For different types of topics, there can be more topic-changing method.
-        All topic-changing methods should summon a Change and call _UpdateByUser to send the change to server and setup the preview.
-        '''
         change = StringChangeTypes.SetChange(value)
         self._UpdateByUser(change)
 
-    def _NotifyListeners(self,change:Change):
+    def _NotifyListeners(self,change:Change, old_value, new_value):
         if isinstance(change,StringChangeTypes.SetChange):
-            self.on_set(change.value)
+            self.on_set(new_value)
         else:
-            raise Exception(f'Unknown change type {type(change)}')
+            raise Exception(f'Unsupported change type {type(change)} for StringTopic')
 
-class ListTopic(Topic):
+class UListTopic(Topic):
     '''
-    ListTopic is a topic that has a list value.
+    Unordered list topic
     '''
     def __init__(self,name,client:ChatroomClient):
         super().__init__(name,client)
-        if self._value is None:
-            self._value = []
         self.on_set = Action()
-        self.on_append_remove = ActionGroup(2)
+        self.on_append = Action()
+        self.on_remove = Action()
+    
+    def Set(self, value):
+        change = UListChangeTypes.SetChange(value)
+        self._UpdateByUser(change)
 
-    def _NotifyListeners(self,change:Change):
+    def Append(self, item):
+        change = UListChangeTypes.AppendChange(item)
+        self._UpdateByUser(change)
+
+    def Remove(self, item):
+        change = UListChangeTypes.RemoveChange(item)
+        self._UpdateByUser(change)        
+
+    def _NotifyListeners(self,change:Change, old_value, new_value):
         if isinstance(change,UListChangeTypes.SetChange):
-            self.on_set(change.value)
+            self.on_set(new_value)
+            for item in old_value:
+                self.on_remove(item)
+            for item in new_value:
+                self.on_append(item)
         elif isinstance(change,UListChangeTypes.AppendChange):
-            self.on_append_remove[0](change.item)
+            self.on_set(new_value)
+            self.on_append(change.item)
         elif isinstance(change,UListChangeTypes.RemoveChange):
-            self.on_append_remove[1](change.item)
+            self.on_set(new_value)
+            self.on_remove(change.item)
         else:
-            raise Exception('Unknown change type')
+            raise Exception(f'Unsupported change type {type(change)} for UListTopic')
