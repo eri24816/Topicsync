@@ -7,7 +7,7 @@ Clients can also update a topic, which will be synced to all clients.
 from collections import defaultdict
 import queue
 import threading
-from typing import Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 import uuid
 import websockets
 import asyncio
@@ -22,6 +22,11 @@ from itertools import count
 from chatroom import logger
 from chatroom.utils import MakeMessage, ParseMessage
 
+if TYPE_CHECKING:
+    # to stop pylance complaining
+    from websockets.server import WebSocketServerProtocol
+    from websockets import exceptions as ws_exceptions
+
 
 class ChatroomServer:
 
@@ -30,7 +35,7 @@ class ChatroomServer:
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
         self.client_id_count = count(1)
-        self._clients : Dict[int,websockets.WebSocketServerProtocol] = {}
+        self._clients : Dict[int,WebSocketServerProtocol] = {}
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self._sending_queue = queue.Queue()
         self._evnt = EventManager()
@@ -40,7 +45,6 @@ class ChatroomServer:
             self._message_handlers[message_type] = getattr(self,'_'+message_type)
         
         self._thread = None
-
 
         if start_thread:
             self.StartThread()
@@ -68,7 +72,7 @@ class ChatroomServer:
                     self._logger.Error(f"Unknown message type: {message_type}")
                     pass
 
-        except websockets.exceptions.ConnectionClosed as e:
+        except ws_exceptions.ConnectionClosed as e:
             print(e)
             self._logger.Info(f"Client {client_id} disconnected")
             # clear subscriptions
@@ -174,6 +178,7 @@ class ChatroomServer:
         # validate the change
         if f'_chatroom/validate_change/{topic_name}' in self._services:
             response = await self._MakeRequest(f'_chatroom/validate_change/{topic_name}',change=change)
+            assert response
             if not response['valid']:
                 await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=response['reason'] if 'reason' in response else 'unknown')
                 return
@@ -217,7 +222,7 @@ class ChatroomServer:
         Bloking function that starts the server
         '''
         asyncio.set_event_loop(asyncio.new_event_loop())
-        start_server = websockets.serve(self._HandleClient, "localhost", self._port)
+        start_server = websockets.serve(self._HandleClient, "localhost", self._port) # type: ignore
         self._logger.Info("Chatroom server started")
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()

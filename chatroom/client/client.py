@@ -1,6 +1,6 @@
 import queue
 import uuid
-from typing import Callable, Dict, List, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, Type, TypeVar
 import websockets
 import asyncio
 import json
@@ -11,6 +11,11 @@ import threading
 from chatroom.client.topic import StringTopic, Topic
 from chatroom.client.request import Request
 from chatroom.utils import MakeMessage, ParseMessage
+
+if TYPE_CHECKING:
+    # to stop pylance complaning
+    from websockets.client import connect as ws_connect
+
 
 class ChatroomClient:
     message_types = []
@@ -55,7 +60,7 @@ class ChatroomClient:
         '''
         Connect to the server and start the client loop
         '''
-        self._ws = await websockets.connect(self._host)
+        self._ws = await ws_connect(self._host)
 
     async def _ReceivingLoop(self):
         '''
