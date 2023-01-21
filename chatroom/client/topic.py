@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections import deque
+import copy
 from typing import Deque, Dict, Tuple
 from typing import Callable, List, TYPE_CHECKING
 from itertools import count
@@ -32,7 +33,7 @@ class Topic(metaclass = abc.ABCMeta):
         return camel_to_snake(self.__class__.__name__.replace('Topic',''))
     
     def GetValue(self):
-        return self._value
+        return copy.deepcopy(self._value)
         
     '''
     Private methods
@@ -97,7 +98,7 @@ class Topic(metaclass = abc.ABCMeta):
         
     def UpdateRejected(self, change_dict):
         # if the change is rejected by server, the change and all preview changes after it should be reversed.
-        if  self._preview_path[0].id == change_dict['id']:
+        if len(self._preview_path) > 0 and self._preview_path[0].id == change_dict['id']:
             while len(self._preview_path)>0:
                 self._ChangeDisplayValue(self._preview_path.pop().Inverse())
         
@@ -140,6 +141,12 @@ class UListTopic(Topic):
     def Remove(self, item):
         change = UListChangeTypes.RemoveChange(item)
         self._UpdateByUser(change)        
+
+    def __getitem__(self, index):
+        return copy.deepcopy(self._value[index])
+    
+    def __len__(self):
+        return len(self._value)
 
     def _NotifyListeners(self,change:Change, old_value, new_value):
         if isinstance(change,UListChangeTypes.SetChange):
