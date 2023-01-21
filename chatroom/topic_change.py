@@ -6,13 +6,22 @@ The server then sends the change to all the subscribers of the topic.
 '''
 import uuid
 
+default_topic_value = {
+    'string':'',
+    'int':0,
+    'float':0.0,
+    'bool':False,
+    'u_list':[],
+    'list':[],
+}
+
 def remove_entry(dictionary,key):
     dictionary = dictionary.copy()
     if key in dictionary:
         del dictionary[key]
     return dictionary
 
-def DeserializeChange(topic_type, change_dict):
+def DeserializeChange(topic_type, change_dict)->Change:
     change_type, change_dict = change_dict['type'], remove_entry(change_dict,'type')
     return TypeNameToChangeTypes[topic_type].types[change_type](**change_dict)
 
@@ -25,7 +34,7 @@ class Change:
     def Apply(self, old_value):
         return old_value
     def Serialize(self):
-        return {}
+        raise NotImplementedError()
     def Inverse(self)->Change:
         '''
         Inverse() is defined after Apply called. It returns a change that will undo the change.
@@ -64,6 +73,8 @@ class UListChangeTypes:
         def Apply(self, old_value):
             old_value.append(self.item)
             return old_value
+        def Serialize(self):
+            return {"type":"append","item":self.item,"id":self.id}
         def Inverse(self)->Change:
             return UListChangeTypes.RemoveChange(self.item)
         
@@ -75,11 +86,15 @@ class UListChangeTypes:
             super().__init__(id)
             self.item = item
         def Apply(self, old_value):
+            if self.item not in old_value:
+                raise ValueError(f'{self.item} is not in {old_value}')
             old_value.remove(self.item)
             return old_value
+        def Serialize(self):
+            return {"type":"remove","item":self.item,"id":self.id}
         def Inverse(self)->Change:
             return UListChangeTypes.AppendChange(self.item)
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
-TypeNameToChangeTypes = {'string':StringChangeTypes,'ulist':UListChangeTypes}
+TypeNameToChangeTypes = {'string':StringChangeTypes,'u_list':UListChangeTypes}

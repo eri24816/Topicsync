@@ -2,8 +2,8 @@ import unittest
 from chatroom import ChatroomServer, ChatroomClient
 import time
 
-from chatroom.client.topic import StringTopic
-from utils import get_free_port
+from chatroom.client.topic import StringTopic, UListTopic
+from utils import get_free_port, Empty, random_combinations
 
 class TestTopic(unittest.TestCase):
     def test_subscribe(self):
@@ -120,8 +120,99 @@ class TestTopic(unittest.TestCase):
         self.assertEqual(reciever_topic.GetValue(), '5')
         self.assertEqual(sender_topic.GetValue(), '5')
 
+class TestTopicChanges(unittest.TestCase):
+    def test_u_list(self):
+        port = get_free_port()
+        server = ChatroomServer(start_thread=True,port = port)
+        client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
+        client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
+        control = []
+        ulist1 = client1.RegisterTopic(UListTopic, "ulist")
+        ulist2 = client2.RegisterTopic(UListTopic, "ulist")
 
-        
-    
+        app1 = Empty(a=[],b=[])
+        app2 = Empty(a=[],b=[])
 
+        # on_set
+        def ulist1_set(x): app1.a = x
+        def ulist2_set(x): app2.a = x
+        ulist1.on_set += ulist1_set
+        ulist2.on_set += ulist2_set
+
+        # on_add and on_remove
+        ulist1.on_append += lambda x: app1.b.append(x)
+        ulist1.on_remove += lambda x: app1.b.remove(x)
+        ulist2.on_append += lambda x: app2.b.append(x)
+        ulist2.on_remove += lambda x: app2.b.remove(x)
+
+        def assert_equal(answer):
+            answer = sorted(answer)
+            self.assertEqual(sorted(app1.a), answer)
+            self.assertEqual(sorted(app2.a), answer)
+            self.assertEqual(sorted(app1.b), answer)
+            self.assertEqual(sorted(app2.b), answer)
+
+        ulist1.Set([1,2,3])
+        time.sleep(0.1)
+        assert_equal([1,2,3])
+
+        ulist1.Append(4)
+        ulist2.Append(5)
+        time.sleep(0.1)
+        assert_equal([1,2,3,4,5])
+
+        ulist1.Remove(1)
+        ulist2.Remove(2)
+        ulist2.Append(6)
+        ulist1.Remove(7) # should not do anything
+        ulist1.Remove(3)
+        time.sleep(0.1)
+        assert_equal([4,5,6])
+
+        ulist2.Set([4,5,6])
+        time.sleep(0.1)
+        assert_equal([4,5,6])
+
+    def test_u_list2(self):
+        port = get_free_port()
+        server = ChatroomServer(start_thread=True,port = port)
+        client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
+        client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
+
+        control = []
+        ulist1 = client1.RegisterTopic(UListTopic, "ulist")
+        ulist2 = client2.RegisterTopic(UListTopic, "ulist")
+
+        app1 = Empty(a=[],b=[])
+        app2 = Empty(a=[],b=[])
+
+        # on_set
+        def ulist1_set(x): app1.a = x
+        def ulist2_set(x): app2.a = x
+        ulist1.on_set += ulist1_set
+        ulist2.on_set += ulist2_set
+
+        # on_add and on_remove
+        ulist1.on_append += lambda x: app1.b.append(x)
+        ulist1.on_remove += lambda x: app1.b.remove(x)
+        ulist2.on_append += lambda x: app2.b.append(x)
+        ulist2.on_remove += lambda x: app2.b.remove(x)
+
+        def assert_equal(answer):
+            answer = sorted(answer)
+            self.assertEqual(sorted(app1.a), answer)
+            self.assertEqual(sorted(app2.a), answer)
+            self.assertEqual(sorted(app1.b), answer)
+            self.assertEqual(sorted(app2.b), answer)
+
+        ulist1.Set([1,2,3])
+        time.sleep(0.1)
+        assert_equal([1,2,3])
+
+        ulist1.Remove(2)
+        ulist1.Append(4)
+        ulist2.Remove(2)
+        ulist2.Append(5)
+        time.sleep(0.1)
+        assert_equal([1,3,4,5])

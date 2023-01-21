@@ -1,3 +1,5 @@
+import threading
+lock = threading.Lock()
 DEBUG = 1
 INFO = 2
 WARNING = 3
@@ -16,8 +18,10 @@ class Logger:
         self._prefix = prefix
 
     def Log(self,message,level=INFO):
+        lock.acquire()
         if level >= self._level:
-            print(f'{self._prefix} [{level_names[level]}] {message}')
+            print(f'{self._prefix} [{level_names[level]}] {message}',flush=True)
+        lock.release()
 
     def Debug(self,message):
         self.Log(message,DEBUG)

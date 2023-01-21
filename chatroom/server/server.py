@@ -25,7 +25,7 @@ from chatroom.utils import MakeMessage, ParseMessage
 if TYPE_CHECKING:
     # to stop pylance complaining
     from websockets.server import WebSocketServerProtocol
-    from websockets import exceptions as ws_exceptions
+from websockets import exceptions as ws_exceptions
 
 
 class ChatroomServer:
@@ -184,10 +184,18 @@ class ChatroomServer:
                 return
 
         topic = self._topics[topic_name]
-        topic.ApplyChange(change)
-
+        try:
+            topic.ApplyChange(change)
+        except Exception as e:
+            print(e)
+            # notify the client that the update is rejected
+            await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=str(e))
+            return
+        #topic.ApplyChange(change)
+        
         # notify all subscribers
         await self._SendToClients(topic.GetSubscribers(),"update",topic_name=topic_name,change=change)
+        
 
     async def _unsubscribe(self,client,topic_name):
         '''

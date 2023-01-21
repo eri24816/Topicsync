@@ -12,10 +12,8 @@ from chatroom.client.topic import StringTopic, Topic
 from chatroom.client.request import Request
 from chatroom.utils import MakeMessage, ParseMessage
 
-if TYPE_CHECKING:
-    # to stop pylance complaning
-    from websockets.client import connect as ws_connect
-
+# to stop pylance complaning
+from websockets.client import connect as ws_connect
 
 class ChatroomClient:
     message_types = []
@@ -66,22 +64,28 @@ class ChatroomClient:
         '''
         Receiving loop
         '''
-        async for message in self._ws:
-            self._logger.Debug(f"> {message}")  
-            message_type,args = ParseMessage(message)
-            if message_type in self._message_handlers:
-                self._message_handlers[message_type](**args)
-            else:
-                self._logger.Warning(f"Unknown message type {message_type}")
+        try:
+            async for message in self._ws:
+                self._logger.Debug(f"> {message}")  
+                message_type,args = ParseMessage(message)
+                if message_type in self._message_handlers:
+                    self._message_handlers[message_type](**args)
+                else:
+                    self._logger.Warning(f"Unknown message type {message_type}")
+        except websockets.exceptions.ConnectionClosed:
+            self._logger.Info("Connection closed")
 
     async def _SendingLoop(self):
         '''
         Sending loop
         '''
-        while True:
-            message = await self._sending_queue.get()
-            await self._ws.send(message)
-            self._logger.Debug(f"< {message}")
+        try:
+            while True:
+                message = await self._sending_queue.get()
+                await self._ws.send(message)
+                self._logger.Debug(f"< {message}")
+        except websockets.exceptions.ConnectionClosed:
+            self._logger.Info("Connection closed")
 
     def _SendToServerRaw(self,message):
         '''

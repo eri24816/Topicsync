@@ -5,7 +5,7 @@ from typing import Callable, List, TYPE_CHECKING
 from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
-from chatroom.topic_change import DeserializeChange, Change, StringChangeTypes, UListChangeTypes
+from chatroom.topic_change import DeserializeChange, Change, StringChangeTypes, UListChangeTypes, default_topic_value
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -14,7 +14,7 @@ class Topic(metaclass = abc.ABCMeta):
     def __init__(self,name,client:ChatroomClient):
         self.client = client
         self._name = name
-        self._value = None
+        self._value = default_topic_value[self.GetTypeName()]
         self._preview_changes : Dict[int,Change] = {}
         self._preview_path : Deque[Change] = deque()
 
@@ -46,19 +46,25 @@ class Topic(metaclass = abc.ABCMeta):
         After the server approves the change, the change will be popped (identified by the id).
         If the server rejects the change, all the changes in the preview history will be reversed and cleared.
         '''
+        if not self._ChangeDisplayValue(change):
+            return
+        
         self._preview_path.append(change)
-        self._ChangeDisplayValue(change)
-
         # send the change to server
         self.client.Update(self.GetName(), change.Serialize())
     
     def _ChangeDisplayValue(self, change:Change):
         '''
-        Set the display value and notify listeners
+        Set the display value and notify listeners. Return False if the change is invalid.
         '''
         old_value = self._value
-        self._value = change.Apply(self._value)
+        try:
+            self._value = change.Apply(self._value)
+        except Exception as e:
+            print('invalid change',e)
+            return False
         self._NotifyListeners(change,old_value=old_value,new_value=self._value)
+        return True
 
     '''
     Abstract/virtual methods
@@ -91,7 +97,7 @@ class Topic(metaclass = abc.ABCMeta):
         
     def UpdateRejected(self, change_dict):
         # if the change is rejected by server, the change and all preview changes after it should be reversed.
-        if self._preview_path[0].id == change_dict['id']:
+        if  self._preview_path[0].id == change_dict['id']:
             while len(self._preview_path)>0:
                 self._ChangeDisplayValue(self._preview_path.pop().Inverse())
         
