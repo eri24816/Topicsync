@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 import uuid
 import websockets
 import asyncio
+from chatroom.router.endpoint import WSEndpoint
 
 from chatroom.utils import EventManager
 from chatroom.topic_change import SetChange
@@ -36,7 +37,7 @@ class ChatroomRouter:
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
         self.client_id_count = count(1)
-        self._clients : Dict[int,WebSocketServerProtocol] = {}
+        self._clients : Dict[int,WSEndpoint] = {}
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self._sending_queue = queue.Queue()
         self._evnt = EventManager()
@@ -54,17 +55,18 @@ class ChatroomRouter:
         print("Router deleted")
         self.Stop()
         
-    async def _HandleClient(self,client,path):
+    async def _HandleClient(self,ws,path):
         '''
         Handle a client connection. 
         '''
+        client = WSEndpoint(ws,self._logger)
         try:
             client_id = next(self.client_id_count)
             self._clients[client_id] = client
             self._logger.Info(f"Client {client_id} connected")
-            await self._SendToClient(client,"hello",id=client_id)
+            await client.Send("hello",id=client_id)
 
-            async for message in client:
+            async for message in ws:
                 self._logger.Debug(f"> {message}")
                 message_type, args = ParseMessage(message)
                 if message_type in self._message_handlers:
@@ -82,27 +84,6 @@ class ChatroomRouter:
                     topic.RemoveSubscriber(client)
             del self._clients[client_id]
 
-    async def _SendToClientRaw(self,client,message):
-        '''
-        Send a message to a client
-        '''
-        await client.send(message)
-        self._logger.Debug(f"< {message}")
-
-    async def _SendToClient(self,client,*args,**kwargs):
-        '''
-        Send a message to a client
-        '''
-        await self._SendToClientRaw(client,MakeMessage(*args,**kwargs))
-
-    async def _SendToClients(self,clients,*args,**kwargs):
-        '''
-        Send a message to a list of clients
-        '''
-        corountines = []
-        for subscriber in clients:
-            corountines.append(self._SendToClient(subscriber,*args,**kwargs))
-        await asyncio.gather(*corountines)
     '''
     ================================
     Internal API functions 
@@ -117,7 +98,7 @@ class ChatroomRouter:
         response = await self._MakeRequest(service_name=service_name,**args)
 
         # forward the response back to the client
-        await self._SendToClient(client,"response",response=response,request_id=request_id)
+        await client.Send("response",response=response,request_id=request_id)
 
     async def _response(self,client,response,request_id):
         '''
@@ -153,7 +134,7 @@ class ChatroomRouter:
 
             # subscribe the client to the topic
             topic.AddSubscriber(client)
-            await self._SendToClient(client,"update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
+            await client.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
             # since the topic has no value yet, no update is sent to the client
         else:
@@ -161,7 +142,7 @@ class ChatroomRouter:
 
             # subscribe the client to the topic and send the current value to the client
             topic.AddSubscriber(client)
-            await self._SendToClient(client,"update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
+            await client.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
     #TODO async def _delete_topic(self,client,topic_name):
 
@@ -181,7 +162,7 @@ class ChatroomRouter:
             response = await self._MakeRequest(f'_chatroom/validate_change/{topic_name}',change=change)
             assert response
             if not response['valid']:
-                await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=response['reason'] if 'reason' in response else 'unknown')
+                await client.Send("reject_update",topic_name=topic_name,change=change,reason=response['reason'] if 'reason' in response else 'unknown')
                 return
 
         topic = self._topics[topic_name]
@@ -190,12 +171,13 @@ class ChatroomRouter:
         except InvalidChangeError as e:
             print(e)
             # notify the client that the update is rejected
-            await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=str(e))
+            await client.Send("reject_update",topic_name=topic_name,change=change,reason=str(e))
             return
         #topic.ApplyChange(change)
         
         # notify all subscribers
-        await self._SendToClients(topic.GetSubscribers(),"update",topic_name=topic_name,change=change)
+        for client in topic.GetSubscribers():
+            await client.Send("update",topic_name=topic_name,change=change)
         
 
     async def _unsubscribe(self,client,topic_name):
@@ -217,7 +199,7 @@ class ChatroomRouter:
         '''
         provider = self._services[service_name].provider
         request_id = str(uuid.uuid4())
-        await self._SendToClient(provider,"request",service_name=service_name,args=args,request_id=request_id)
+        await provider.Send("request",service_name=service_name,args=args,request_id=request_id)
         response = await self._evnt.Wait(f'response_waiter{request_id}')
         return response
 
