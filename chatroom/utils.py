@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 class EventWithData(asyncio.Event):
     def __init__(self):
@@ -18,7 +18,16 @@ class EventWithData(asyncio.Event):
     async def wait(self):
         await super().wait()
         return self.data
-    
+
+class EventManager:
+    def __init__(self) -> None:
+        self._event_pool:Dict[str,EventWithData] = {}
+    def Wait(self,name):
+        event = self._event_pool[name] = EventWithData()
+        return event.wait()
+    def Resume(self,name,data=None):
+        return self._event_pool.pop(name).set(data)
+
 def MakeMessage(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
 

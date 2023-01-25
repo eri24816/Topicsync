@@ -1,4 +1,4 @@
-from chatroom import ChatroomServer
+from chatroom import ChatroomRouter
 
-server = ChatroomServer()
+server = ChatroomRouter()
 server.Start()

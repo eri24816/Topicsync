@@ -1,10 +1,10 @@
 import unittest
-from chatroom import ChatroomServer, ChatroomClient
+from chatroom import ChatroomRouter, ChatroomClient
 import time
 
 class TestService(unittest.TestCase):
     def test_service(self):
-        server = ChatroomServer(start_thread=True)
+        server = ChatroomRouter(start_thread=True)
         client1 = ChatroomClient(start=True,log_prefix="client1")
         client2 = ChatroomClient(start=True,log_prefix="client2")
 

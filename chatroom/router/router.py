@@ -12,7 +12,7 @@ import uuid
 import websockets
 import asyncio
 
-from chatroom.server.event_manager import EventManager
+from chatroom.utils import EventManager
 from chatroom.topic_change import SetChange
 
 from .topic import CreateTopic, Topic
@@ -27,8 +27,9 @@ if TYPE_CHECKING:
     from websockets.server import WebSocketServerProtocol
 from websockets import exceptions as ws_exceptions
 
+from chatroom.topic_change import InvalidChangeError
 
-class ChatroomServer:
+class ChatroomRouter:
 
     def __init__(self,port=8765,start_thread = False, log_prefix = "Server"):
         self._port = port
@@ -50,7 +51,7 @@ class ChatroomServer:
             self.StartThread()
 
     def __del__(self):
-        print("Server deleted")
+        print("Router deleted")
         self.Stop()
         
     async def _HandleClient(self,client,path):
@@ -186,7 +187,7 @@ class ChatroomServer:
         topic = self._topics[topic_name]
         try:
             topic.ApplyChange(change)
-        except Exception as e:
+        except InvalidChangeError as e:
             print(e)
             # notify the client that the update is rejected
             await self._SendToClient(client,"reject_update",topic_name=topic_name,change=change,reason=str(e))
@@ -251,5 +252,5 @@ class ChatroomServer:
             self._thread.join()
 
 if __name__ == "__main__":
-    chatroom = ChatroomServer()
+    chatroom = ChatroomRouter()
     chatroom.Start()

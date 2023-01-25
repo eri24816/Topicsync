@@ -1,9 +1,9 @@
 import threading
-from chatroom import ChatroomServer, ChatroomClient
+from chatroom import ChatroomRouter, ChatroomClient
 import random
 
 def create_server():
-    server = ChatroomServer()
+    server = ChatroomRouter()
     server_thread = threading.Thread(target=server.Start)
     server_thread.daemon = True
     server_thread.start()

@@ -6,6 +6,9 @@ The server then sends the change to all the subscribers of the topic.
 '''
 import uuid
 
+class InvalidChangeError(Exception):
+    pass
+
 default_topic_value = {
     'string':'',
     'int':0,
@@ -87,7 +90,7 @@ class UListChangeTypes:
             self.item = item
         def Apply(self, old_value):
             if self.item not in old_value:
-                raise ValueError(f'{self.item} is not in {old_value}')
+                raise InvalidChangeError(f'{self.item} is not in {old_value}')
             old_value.remove(self.item)
             return old_value
         def Serialize(self):
