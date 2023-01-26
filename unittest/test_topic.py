@@ -2,7 +2,7 @@ import unittest
 from chatroom import ChatroomServer, ChatroomClient
 import time
 
-from chatroom.client.topic import StringTopic, UListTopic
+from chatroom.topic import StringTopic, UListTopic
 from utils import get_free_port, Empty, random_combinations
 
 class TestTopic(unittest.TestCase):
