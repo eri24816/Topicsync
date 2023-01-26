@@ -27,7 +27,7 @@ class ChatroomClient:
 
         self._message_handlers:Dict[str,Callable] = {}
         for message_type in ['hello','update','request','response','reject_update']:
-            self._message_handlers[message_type] = getattr(self,'_'+message_type)
+            self._message_handlers[message_type] = getattr(self,'_handle_'+message_type)
 
         if start:
             self.Start()
@@ -106,34 +106,34 @@ class ChatroomClient:
     ================================
     '''
 
-    def _hello(self,id):
+    def _handle_hello(self,id):
         '''
         Handle a hello message from the server
         '''
         self._client_id = id
         self._logger.Info(f"Connected to server as client {self._client_id}")
 
-    def _update(self,topic_name,change):
+    def _handle_update(self,topic_name,change):
         '''
         Handle an update message from the server
         '''
         self._topics[topic_name].Update(change) # The topic will handle the update and call the callbacks
 
-    def _request(self,service_name,args,request_id):
+    def _handle_request(self,service_name,args,request_id):
         '''
         Handle a request from another client
         '''
         response = self.service_pool[service_name](**args)
         self._SendToServer("response",response = response,request_id = request_id)
 
-    def _response(self,request_id,response):
+    def _handle_response(self,request_id,response):
         '''
         Handle a response from another client
         '''
         request = self.request_pool.pop(request_id)
         request.on_response(response)
 
-    def _reject_update(self,topic_name,change,reason):
+    def _handle_reject_update(self,topic_name,change,reason):
         '''
         Handle a rejected update from the server
         '''

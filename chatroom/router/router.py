@@ -4,14 +4,13 @@ Clients can subscribe to a topic and receive updates when the topic is updated.
 Clients can also update a topic, which will be synced to all clients.
 '''
 
-from collections import defaultdict
 import queue
 import threading
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 import uuid
 import websockets
 import asyncio
-from chatroom.router.endpoint import WSEndpoint
+from chatroom.router.endpoint import Endpoint, WSEndpoint
 
 from chatroom.utils import EventManager
 from chatroom.topic_change import SetChange
@@ -21,30 +20,26 @@ from .service import Service, Request
 import json
 from itertools import count
 from chatroom import logger
-from chatroom.utils import MakeMessage, ParseMessage
+from chatroom.utils import ParseMessage
 
-if TYPE_CHECKING:
-    # to stop pylance complaining
-    from websockets.server import WebSocketServerProtocol
 from websockets import exceptions as ws_exceptions
 
-from chatroom.topic_change import InvalidChangeError
+from chatroom.topic_change import InvalidChangeException
 
 class ChatroomRouter:
 
-    def __init__(self,port=8765,start_thread = False, log_prefix = "Server"):
+    def __init__(self,server,port=8765,start_thread = True, log_prefix = "Server"):
         self._port = port
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
-        self.client_id_count = count(1)
-        self._clients : Dict[int,WSEndpoint] = {}
+        self._client_id_count = count(1)
+        self._endpoints : Dict[int,Endpoint] = {0:server}
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
-        self._sending_queue = queue.Queue()
         self._evnt = EventManager()
         
         self._message_handlers:Dict[str,Callable] = {}
         for message_type in ['request','response','register_service','unregister_service','subscribe','update','unsubscribe']:
-            self._message_handlers[message_type] = getattr(self,'_'+message_type)
+            self._message_handlers[message_type] = getattr(self,'handle_'+message_type)
         
         self._thread = None
 
@@ -61,8 +56,8 @@ class ChatroomRouter:
         '''
         client = WSEndpoint(ws,self._logger)
         try:
-            client_id = next(self.client_id_count)
-            self._clients[client_id] = client
+            client_id = next(self._client_id_count)
+            self._endpoints[client_id] = client
             self._logger.Info(f"Client {client_id} connected")
             await client.Send("hello",id=client_id)
 
@@ -82,7 +77,7 @@ class ChatroomRouter:
             for topic in self._topics.values():
                 if client in topic.GetSubscribers():
                     topic.RemoveSubscriber(client)
-            del self._clients[client_id]
+            del self._endpoints[client_id]
 
     '''
     ================================
@@ -90,7 +85,7 @@ class ChatroomRouter:
     ================================
     '''
 
-    async def _request(self,client,service_name,args,request_id):
+    async def handle_request(self,client,service_name,args,request_id):
         '''
         Request a service. The server forwards the request to the service provider.
         '''
@@ -100,16 +95,16 @@ class ChatroomRouter:
         # forward the response back to the client
         await client.Send("response",response=response,request_id=request_id)
 
-    async def _response(self,client,response,request_id):
+    async def handle_response(self,client,response,request_id):
         '''
         Response to a service request. The server forwards the response to the client.
         '''
         self._evnt.Resume(f'response_waiter{request_id}',response)
 
-    async def _register_service(self,client,service_name):
+    async def handle_register_service(self,client,service_name):
         self._services[service_name] = Service(service_name,client)
 
-    async def _unregister_service(self,client,service_name):
+    async def handle_unregister_service(self,client,service_name):
         if service_name not in self._services:
             self._logger.Error(f"Service {service_name} not registered")
             return
@@ -118,7 +113,7 @@ class ChatroomRouter:
             return
         del self._services[service_name]
 
-    async def _subscribe(self,client,topic_name,type):
+    async def handle_subscribe(self,client,topic_name,type):
         '''
         The client wants to access a topic. 
         Since the client may not know if the topic exists, the server creates the topic if it's not. 
@@ -146,7 +141,7 @@ class ChatroomRouter:
 
     #TODO async def _delete_topic(self,client,topic_name):
 
-    async def _update(self,client,topic_name,change):
+    async def handle_update(self,client,topic_name,change):
         '''
         Try to update a topic. The server first request the '_chatroom/validate_change' service to validate the change, then
         - forwards the update to all subscribers, if the change is valid
@@ -168,7 +163,7 @@ class ChatroomRouter:
         topic = self._topics[topic_name]
         try:
             topic.ApplyChange(change)
-        except InvalidChangeError as e:
+        except InvalidChangeException as e:
             print(e)
             # notify the client that the update is rejected
             await client.Send("reject_update",topic_name=topic_name,change=change,reason=str(e))
@@ -180,12 +175,14 @@ class ChatroomRouter:
             await client.Send("update",topic_name=topic_name,change=change)
         
 
-    async def _unsubscribe(self,client,topic_name):
+    async def handle_unsubscribe(self,client,topic_name):
         '''
         Remove a client from a topic
         '''
         topic = self._topics[topic_name]
         topic.RemoveSubscriber(client)
+
+    
 
     '''
     ================================

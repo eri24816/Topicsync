@@ -6,7 +6,7 @@ from typing import Callable, List, TYPE_CHECKING
 from itertools import count
 if TYPE_CHECKING:
     from .client import ChatroomClient
-from chatroom.topic_change import DeserializeChange, Change, StringChangeTypes, UListChangeTypes, default_topic_value
+from chatroom.topic_change import Change, StringChangeTypes, UListChangeTypes, default_topic_value
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -81,7 +81,7 @@ class Topic(metaclass = abc.ABCMeta):
     '''
     def Update(self, change_dict):
 
-        change = DeserializeChange(self.GetTypeName(),change_dict) # first obtain the change object
+        change = Change.Deserialize(self.GetTypeName(),change_dict) # first obtain the change object
 
         if len(self._preview_path)>0 and change.id == self._preview_path[0].id: 
             # if the oldest previewing change is approved by server

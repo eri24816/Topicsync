@@ -6,7 +6,7 @@ The server then sends the change to all the subscribers of the topic.
 '''
 import uuid
 
-class InvalidChangeError(Exception):
+class InvalidChangeException(Exception):
     pass
 
 default_topic_value = {
@@ -24,11 +24,12 @@ def remove_entry(dictionary,key):
         del dictionary[key]
     return dictionary
 
-def DeserializeChange(topic_type, change_dict)->Change:
-    change_type, change_dict = change_dict['type'], remove_entry(change_dict,'type')
-    return TypeNameToChangeTypes[topic_type].types[change_type](**change_dict)
-
 class Change: 
+    @staticmethod
+    def Deserialize(topic_type, change_dict)->Change:
+        change_type, change_dict = change_dict['type'], remove_entry(change_dict,'type')
+        return TypeNameToChangeTypes[topic_type].types[change_type](**change_dict)
+    
     def __init__(self,id=None):
         if id is None:
             self.id = str(uuid.uuid4())
@@ -90,7 +91,7 @@ class UListChangeTypes:
             self.item = item
         def Apply(self, old_value):
             if self.item not in old_value:
-                raise InvalidChangeError(f'{self.item} is not in {old_value}')
+                raise InvalidChangeException(f'{self.item} is not in {old_value}')
             old_value.remove(self.item)
             return old_value
         def Serialize(self):

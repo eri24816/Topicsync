@@ -1,8 +1,9 @@
 from typing import Dict
 
+from chatroom.router.endpoint import Endpoint
 
 class Service:
-    def __init__(self,name:str,provider:int) -> None:
+    def __init__(self,name:str,provider:Endpoint) -> None:
         self.name = name
         self.provider = provider
 

@@ -1,5 +1,5 @@
 from typing import Dict
-from chatroom.topic_change import Change, DeserializeChange,default_topic_value
+from chatroom.topic_change import Change,default_topic_value
 
 def CreateTopic(name,type:str,value=None):
     if value is None:
@@ -22,7 +22,7 @@ class Topic:
         Apply a change to the topic. The change is a dictionary that is deserialized from a JSON string.
         If the change is invalid accroding to the definition of the topic type, an exception will be raised.
         '''
-        change = DeserializeChange(self._type,change_dict)
+        change = Change.Deserialize(self._type,change_dict)
         self._value = change.Apply(self._value)
 
     def AddSubscriber(self,subscriber):
