@@ -1,2 +1,2 @@
 from .client.client import ChatroomClient
-from .router.router import ChatroomRouter
+from .server.server import ChatroomServer

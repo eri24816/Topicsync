@@ -38,7 +38,7 @@ class CommandManager:
         
         
     def __init__(self) -> None:
-        self._recorded_commands = []
+        self._recorded_commands: list[Command] = []
         self._recording = False
 
     def StartRecording(self):

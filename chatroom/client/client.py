@@ -208,11 +208,12 @@ class ChatroomClient:
 
     # called by the topic class =================================
 
-    def Update(self,topic_name,change):
+    def UpdateSingle(self,topic_name,change):
         '''
-        Update a topic
+        Update a topic.
         '''
-        self._SendToServer("update",topic_name=topic_name,change=change)
+        changes = [{'topic_name':topic_name,'change':change}]
+        self._SendToServer("client_update",changes=changes)
 
     def Unsubscribe(self,topic_name):
         '''

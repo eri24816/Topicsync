@@ -52,7 +52,7 @@ class Topic(metaclass = abc.ABCMeta):
         
         self._preview_path.append(change)
         # send the change to server
-        self.client.Update(self.GetName(), change.Serialize())
+        self.client.UpdateSingle(self.GetName(), change.Serialize())
     
     def _ChangeDisplayValue(self, change:Change):
         '''

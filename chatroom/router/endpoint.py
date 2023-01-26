@@ -21,14 +21,20 @@ class WSEndpoint(Endpoint):
         await self._SendRaw(MakeMessage(*args,**kwargs))
 
 class PythonEndpoint(Endpoint):
-    def __init__(self,target,event_loop):
-        self.event_loop = event_loop
+    def __init__(self,target):
+        self._event_loop = None
         self._target = target
-        self._back_queue = asyncio.Queue(loop=event_loop)
+        self.queue_to_router = None
+
+    def SetEventLoop(self,event_loop):
+        self._event_loop = event_loop
+        self.queue_to_router = asyncio.Queue(loop=event_loop)
 
     def Send(self,message_type,*args,**kwargs):
         method = getattr(self._target,'_handle_'+message_type)
         method(*args,**kwargs)
 
-    async def SendBack(self,*args,**kwargs):
-        self.event_loop.call_soon_threadsafe(self._back_queue.put_nowait,MakeMessage(*args,**kwargs))
+    def SendToRouter(self,*args,**kwargs):
+        assert isinstance(self._event_loop,asyncio.AbstractEventLoop)
+        assert isinstance(self.queue_to_router,asyncio.Queue)
+        self._event_loop.call_soon_threadsafe(self.queue_to_router.put_nowait,MakeMessage(*args,**kwargs))

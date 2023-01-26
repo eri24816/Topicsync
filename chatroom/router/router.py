@@ -26,9 +26,13 @@ from websockets import exceptions as ws_exceptions
 
 from chatroom.topic_change import InvalidChangeException
 
+
+from chatroom.router.endpoint import PythonEndpoint
+
 class ChatroomRouter:
 
-    def __init__(self,server,port=8765,start_thread = True, log_prefix = "Server"):
+    def __init__(self,server:PythonEndpoint,port=8765,start_thread = True, log_prefix = "Router"):
+        self._server = server
         self._port = port
         self._topics :Dict[str,Topic] = {}
         self._services : Dict[str,Service] = {}
@@ -38,7 +42,7 @@ class ChatroomRouter:
         self._evnt = EventManager()
         
         self._message_handlers:Dict[str,Callable] = {}
-        for message_type in ['request','response','register_service','unregister_service','subscribe','update','unsubscribe']:
+        for message_type in ['request','response','register_service','unregister_service','subscribe','client_update','unsubscribe','update','reject_update']:
             self._message_handlers[message_type] = getattr(self,'handle_'+message_type)
         
         self._thread = None
@@ -65,7 +69,7 @@ class ChatroomRouter:
                 self._logger.Debug(f"> {message}")
                 message_type, args = ParseMessage(message)
                 if message_type in self._message_handlers:
-                    await self._message_handlers[message_type](client = client,**args)
+                    await self._message_handlers[message_type](sender = client,**args)
                 else:
                     self._logger.Error(f"Unknown message type: {message_type}")
                     pass
@@ -79,13 +83,25 @@ class ChatroomRouter:
                     topic.RemoveSubscriber(client)
             del self._endpoints[client_id]
 
+    async def _ServerReceiveLoop(self):
+        while True:
+            message = await self._server.queue_to_router.get()
+            self._logger.Debug(f"> {message}")
+            message_type, args = ParseMessage(message)
+            if message_type in self._message_handlers:
+                await self._message_handlers[message_type](sender = self._server,**args)
+            else:
+                self._logger.Error(f"Unknown message type: {message_type}")
+                pass
+
+
     '''
     ================================
     Internal API functions 
     ================================
     '''
 
-    async def handle_request(self,client,service_name,args,request_id):
+    async def handle_request(self,sender,service_name,args,request_id):
         '''
         Request a service. The server forwards the request to the service provider.
         '''
@@ -93,27 +109,27 @@ class ChatroomRouter:
         response = await self._MakeRequest(service_name=service_name,**args)
 
         # forward the response back to the client
-        await client.Send("response",response=response,request_id=request_id)
+        await sender.Send("response",response=response,request_id=request_id)
 
-    async def handle_response(self,client,response,request_id):
+    async def handle_response(self,sender,response,request_id):
         '''
         Response to a service request. The server forwards the response to the client.
         '''
         self._evnt.Resume(f'response_waiter{request_id}',response)
 
-    async def handle_register_service(self,client,service_name):
-        self._services[service_name] = Service(service_name,client)
+    async def handle_register_service(self,sender,service_name):
+        self._services[service_name] = Service(service_name,sender)
 
-    async def handle_unregister_service(self,client,service_name):
+    async def handle_unregister_service(self,sender,service_name):
         if service_name not in self._services:
             self._logger.Error(f"Service {service_name} not registered")
             return
-        if self._services[service_name].provider != client:
-            self._logger.Error(f"Client {client} is not the provider of service {service_name}")
+        if self._services[service_name].provider != sender:
+            self._logger.Error(f"Client {sender} is not the provider of service {service_name}")
             return
         del self._services[service_name]
 
-    async def handle_subscribe(self,client,topic_name,type):
+    async def handle_subscribe(self,sender,topic_name,type):
         '''
         The client wants to access a topic. 
         Since the client may not know if the topic exists, the server creates the topic if it's not. 
@@ -128,61 +144,50 @@ class ChatroomRouter:
             self._logger.Info(f"Created topic {topic_name} of type {type}")
 
             # subscribe the client to the topic
-            topic.AddSubscriber(client)
-            await client.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
+            topic.AddSubscriber(sender)
+            await sender.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
             # since the topic has no value yet, no update is sent to the client
         else:
             topic = self._topics[topic_name]
 
             # subscribe the client to the topic and send the current value to the client
-            topic.AddSubscriber(client)
-            await client.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
+            topic.AddSubscriber(sender)
+            await sender.Send("update",topic_name=topic_name,change=SetChange(topic.Getvalue()).Serialize())
 
     #TODO async def _delete_topic(self,client,topic_name):
 
-    async def handle_update(self,client,topic_name,change):
-        '''
-        Try to update a topic. The server first request the '_chatroom/validate_change' service to validate the change, then
-        - forwards the update to all subscribers, if the change is valid
-        - sends 'reject_update' message to the client, if the change is invalid
-        If there is no '_chatroom/validate_change' service registered, the server will always accept the change.
-        '''
-        if topic_name not in self._topics:
-            self._logger.Error(f"Topic {topic_name} does not exist")
-            return
+    async def handle_client_update(self,sender,changes):
         
-        # validate the change
-        if f'_chatroom/validate_change/{topic_name}' in self._services:
-            response = await self._MakeRequest(f'_chatroom/validate_change/{topic_name}',change=change)
-            assert response
-            if not response['valid']:
-                await client.Send("reject_update",topic_name=topic_name,change=change,reason=response['reason'] if 'reason' in response else 'unknown')
+        for item in changes:
+            topic_name = item['topic_name']
+            if topic_name not in self._topics:
+                self._logger.Error(f"Topic {topic_name} does not exist")
                 return
-
-        topic = self._topics[topic_name]
-        try:
-            topic.ApplyChange(change)
-        except InvalidChangeException as e:
-            print(e)
-            # notify the client that the update is rejected
-            await client.Send("reject_update",topic_name=topic_name,change=change,reason=str(e))
-            return
-        #topic.ApplyChange(change)
         
-        # notify all subscribers
+        self._server.Send("client_update",client=sender,changes = changes)
+
+    async def handle_unsubscribe(self,sender,topic_name):
+        '''
+        Remove a client from a topic subscription.
+        '''
+        topic = self._topics[topic_name]
+        topic.RemoveSubscriber(sender)
+
+    async def handle_reject_update(self,sender,client,topic_name,change,reason):
+        '''
+        The server rejects the update. The client should handle this message.
+        '''
+        await client.Send("reject_update",topic_name=topic_name,change=change,reason=reason)
+
+    async def handle_update(self,sender,topic_name,change):
+        '''
+        The server forwards an update to the client. The client should handle this message.
+        '''
+        topic = self._topics[topic_name]
+        topic.ApplyChange(change)
         for client in topic.GetSubscribers():
             await client.Send("update",topic_name=topic_name,change=change)
-        
-
-    async def handle_unsubscribe(self,client,topic_name):
-        '''
-        Remove a client from a topic
-        '''
-        topic = self._topics[topic_name]
-        topic.RemoveSubscriber(client)
-
-    
 
     '''
     ================================
@@ -210,14 +215,16 @@ class ChatroomRouter:
         Bloking function that starts the server
         '''
         asyncio.set_event_loop(asyncio.new_event_loop())
-        start_server = websockets.serve(self._HandleClient, "localhost", self._port) # type: ignore
+        self._server.SetEventLoop(asyncio.get_event_loop())
+        start_router = websockets.serve(self._HandleClient, "localhost", self._port) # type: ignore
+        start = asyncio.gather(start_router,self._ServerReceiveLoop())
         self._logger.Info("Chatroom server started")
-        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_until_complete(start)
         asyncio.get_event_loop().run_forever()
 
     def StartThread(self):
         '''
-        Starts the server in a new thread
+        Starts the server in a new uwu thread
         '''
         self._thread = threading.Thread(target=self.Start)
         self._thread.daemon = True
@@ -229,7 +236,3 @@ class ChatroomRouter:
         '''
         if self._thread is not None:
             self._thread.join()
-
-if __name__ == "__main__":
-    chatroom = ChatroomRouter()
-    chatroom.Start()

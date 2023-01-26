@@ -1,13 +1,6 @@
 import threading
-from chatroom import ChatroomRouter, ChatroomClient
 import random
 
-def create_server():
-    server = ChatroomRouter()
-    server_thread = threading.Thread(target=server.Start)
-    server_thread.daemon = True
-    server_thread.start()
-    return server
 
 def get_free_port():
     from socket import socket

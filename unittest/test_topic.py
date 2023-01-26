@@ -1,5 +1,5 @@
 import unittest
-from chatroom import ChatroomRouter, ChatroomClient
+from chatroom import ChatroomServer, ChatroomClient
 import time
 
 from chatroom.client.topic import StringTopic, UListTopic
@@ -8,7 +8,7 @@ from utils import get_free_port, Empty, random_combinations
 class TestTopic(unittest.TestCase):
     def test_subscribe(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
@@ -21,7 +21,7 @@ class TestTopic(unittest.TestCase):
 
     def test_post_subscribe(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
@@ -34,7 +34,7 @@ class TestTopic(unittest.TestCase):
 
     def test_react(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
@@ -50,7 +50,7 @@ class TestTopic(unittest.TestCase):
 
     def test_broadcast(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         sender = ChatroomClient(start=True,log_prefix="client1",port = port)
         recievers = [ChatroomClient(start=True,log_prefix=f"client{i}",port = port) for i in range(10)]
 
@@ -63,7 +63,7 @@ class TestTopic(unittest.TestCase):
 
     def test_reject(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         sender = ChatroomClient(start=True,log_prefix="sender",port = port)
         autority = ChatroomClient(start=True,log_prefix="autority",port = port)
         reciever = ChatroomClient(start=True,log_prefix="reciever",port = port)
@@ -80,7 +80,7 @@ class TestTopic(unittest.TestCase):
 
     def test_conditonal_reject(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         sender = ChatroomClient(start=True,log_prefix="sender",port = port)
         autority = ChatroomClient(start=True,log_prefix="autority",port = port)
         reciever = ChatroomClient(start=True,log_prefix="reciever",port = port)
@@ -123,7 +123,7 @@ class TestTopic(unittest.TestCase):
 class TestTopicChanges(unittest.TestCase):
     def test_u_list(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
@@ -176,7 +176,7 @@ class TestTopicChanges(unittest.TestCase):
 
     def test_u_list2(self):
         port = get_free_port()
-        server = ChatroomRouter(start_thread=True,port = port)
+        server = ChatroomServer(port = port)
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
