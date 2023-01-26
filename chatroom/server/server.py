@@ -2,7 +2,7 @@ from typing import Dict
 
 from chatroom.router.router import ChatroomRouter
 from chatroom.router.endpoint import PythonEndpoint
-from .command import ChangeCommand, CommandManager
+from ..command import ChangeCommand, CommandManager
 from chatroom.topic_change import Change, InvalidChangeException
 
 class ChatroomServer:

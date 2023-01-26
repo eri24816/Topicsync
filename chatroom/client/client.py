@@ -8,9 +8,10 @@ from collections import defaultdict
 from chatroom import logger
 import threading
 
-from chatroom.client.topic import StringTopic, Topic
+from chatroom.topic import StringTopic, Topic
 from chatroom.client.request import Request
 from chatroom.utils import MakeMessage, ParseMessage
+from chatroom.command import CommandManager
 
 # to stop pylance complaning
 from websockets.client import connect as ws_connect
@@ -20,6 +21,7 @@ class ChatroomClient:
     def __init__(self,host="localhost",port=8765,start=False,log_prefix="client"):
         self._host = f'ws://{host}:{port}'
         self._topics:Dict[str,Topic] = {}
+        self._command_manager = CommandManager(on_recording_stop=self._OnRecordingStop)
         self._client_id = None
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self.request_pool:Dict[str,Request] = {}
@@ -100,6 +102,11 @@ class ChatroomClient:
         message = MakeMessage(*args,**kwargs)
         self._SendToServerRaw(message)
 
+    def _OnRecordingStop(self,commands):
+        '''
+        Called when the command manager stops recording
+        '''
+        #TODO: send commands to server
     '''
     ================================
     Internal API functions
@@ -112,12 +119,6 @@ class ChatroomClient:
         '''
         self._client_id = id
         self._logger.Info(f"Connected to server as client {self._client_id}")
-
-    def _handle_update(self,topic_name,change):
-        '''
-        Handle an update message from the server
-        '''
-        self._topics[topic_name].Update(change) # The topic will handle the update and call the callbacks
 
     def _handle_request(self,service_name,args,request_id):
         '''
@@ -133,12 +134,27 @@ class ChatroomClient:
         request = self.request_pool.pop(request_id)
         request.on_response(response)
 
+    def _handle_update(self,topic_name,change):
+        '''
+        Handle an update message from the server
+        '''
+        topic = self._topics[topic_name]
+        change = topic.DeserializeChange(change)
+        if change.id == self._command_manager.recorded_commands[0].change.id:
+            self._command_manager.recorded_commands.pop(0)
+        else:
+            self._command_manager.Reset()
+            topic.ApplyChange(change)
+
     def _handle_reject_update(self,topic_name,change,reason):
         '''
         Handle a rejected update from the server
         '''
         self._logger.Warning(f"Update rejected for topic {topic_name}: {reason}")
-        self._topics[topic_name].UpdateRejected(change)
+        recorded = self._command_manager.recorded_commands
+        if len(recorded)>0 and change.id == recorded[0].change.id:
+            self._command_manager.Reset()
+
 
     '''
     ================================
