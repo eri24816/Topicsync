@@ -12,9 +12,9 @@ class TestTopic(unittest.TestCase):
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
-        a1 = client1.RegisterTopic(StringTopic, "a")
+        a1 = client1.GetRootTopic().RegisterChild('a','string')
         time.sleep(0.1)
-        a2 = client2.RegisterTopic(StringTopic, "a")
+        a2 = client2.GetRootTopic().RegisterChild('a','string')
         a1.Set("hello")
         time.sleep(0.1)
         self.assertEqual(a2.GetValue(), "hello")
@@ -25,10 +25,10 @@ class TestTopic(unittest.TestCase):
         client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
-        a1 = client1.RegisterTopic(StringTopic, "a")
+        a1 = client1.GetRootTopic().RegisterChild('a','string')
         a1.Set("hello")
         time.sleep(0.1)
-        a2 = client2.RegisterTopic(StringTopic, "a")
+        a2 = client2.GetRootTopic().RegisterChild('a','string')
         time.sleep(0.1)
         self.assertEqual(a2.GetValue(), "hello")
 

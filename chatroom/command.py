@@ -1,5 +1,6 @@
 from __future__ import annotations
 import contextlib
+import json
 from typing import Callable, TYPE_CHECKING
 from chatroom.topic_change import Change
 if TYPE_CHECKING:
@@ -17,10 +18,10 @@ class Command:
         raise NotImplementedError
 
 class ChangeCommand(Command):
-    def __init__(self,get_topic_by_name:Callable[[None],Topic],topic_name,change:Change) -> None:
+    def __init__(self,get_topic_by_name:Callable[[str],Topic],topic_name,change:Change) -> None:
         super().__init__()
         self.get_topic_by_name = get_topic_by_name
-        self.topic_name = topic_name # Note the topic name is stored to avoid reference to a topic object to be deleted.
+        self.topic_name = topic_name # Note the topic name is stored to avoid reference to a topic object to be deleted. #TODO: test this
         self.change = change
     def Execute(self):
         self.get_topic_by_name(self.topic_name).ApplyChange(self.change)
@@ -28,7 +29,12 @@ class ChangeCommand(Command):
         self.get_topic_by_name(self.topic_name).ApplyChange(self.change.Inverse())
     def Redo(self):
         self.get_topic_by_name(self.topic_name).ApplyChange(self.change)
-
+    def Serialize(self):
+        return {
+            'topic_name':self.topic_name,
+            'change':self.change.Serialize()
+        }
+    
 class CommandManager:
     class RecordContext:
         '''

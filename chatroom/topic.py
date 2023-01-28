@@ -2,26 +2,40 @@ from __future__ import annotations
 from collections import deque
 import contextlib
 import copy
-from typing import Deque, Dict, Tuple
+from typing import Any, Deque, Dict, Tuple
 from typing import Callable, List, TYPE_CHECKING, Optional
 from itertools import count
+from chatroom.command import ChangeCommand
 if TYPE_CHECKING:
     from .client.client import ChatroomClient
     from .command import CommandManager
-from chatroom.topic_change import Change, StringChangeTypes, UListChangeTypes, default_topic_value
+from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, UListChangeTypes, default_topic_value
 from chatroom.utils import Action, camel_to_snake
 import abc
 
-class Topic(metaclass = abc.ABCMeta):
+def TopicFactory(topic_name:str,type:str,on_register_child=None,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None) -> Topic:
+    if type == 'string':
+        return StringTopic(topic_name,on_register_child,get_topic_by_name,command_manager)
+    if type == 'u_list':
+        return UListTopic(topic_name,on_register_child,get_topic_by_name,command_manager)
+    raise ValueError(f'Unknown topic type {type}')
 
-    def __init__(self,name,client:ChatroomClient,command_manager:Optional[CommandManager]=None):
-        self.client = client
+class Topic(metaclass = abc.ABCMeta):
+    @classmethod
+    def GetTypeName(cls):
+        return camel_to_snake(cls.__name__.replace('Topic',''))
+    
+    def __init__(self,name,on_register_child:Optional[Callable[[Topic,str,str],Topic]]=None,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None):
         self._name = name
         self._value = default_topic_value[self.GetTypeName()]
+        self._on_register_child = on_register_child
+        self._verify_change :Optional[Callable[[Any,Any,Change],Topic]] = None
+        self._get_topic_by_name = get_topic_by_name
         self._command_manager = command_manager
 
     def __del__(self):
-        self.client.Unsubscribe(self._name)
+        #TODO unsubscribe if here is client
+        pass
         
     '''
     User-side methods
@@ -30,11 +44,12 @@ class Topic(metaclass = abc.ABCMeta):
     def GetName(self):
         return self._name
     
-    def GetTypeName(self):
-        return camel_to_snake(self.__class__.__name__.replace('Topic',''))
-    
     def GetValue(self):
         return copy.deepcopy(self._value)
+    
+    def RegisterChild(self,base_name:str,type:str):
+        assert self._on_register_child is not None
+        return self._on_register_child(self,base_name,type)
         
     '''
     Abstract/virtual methods
@@ -49,21 +64,32 @@ class Topic(metaclass = abc.ABCMeta):
     Public methods
     '''
 
+    def SetChildrenList(self,children_list:UListTopic):
+        self._children_list = children_list
+
     def ApplyChange(self, change:Change):
         '''
-        Set the display value and notify listeners. Note that this method does not send the change to the server.
+        Set the value and notify listeners. Note that this method does not record the change in the command manager. Use ApplyChangeExternal instead.
         '''
         old_value = self._value
-        self._value = change.Apply(self._value)
+        self._value = change.Apply(copy.deepcopy(self._value))
+        if self._verify_change is not None:
+            if not self._verify_change(old_value,self._value,change):
+                self._value = old_value
+                raise InvalidChangeException(f'Change {change.Serialize()} is not valid for topic {self._name}')
         self._NotifyListeners(change,old_value=old_value,new_value=self._value)
 
-    def UpdateByUser(self, change:Change):
+    def ApplyChangeExternal(self, change:Change):
         '''
-        Call this when the user want to change the value of the topic. The change is recorded in the command manager (then sent to the router).
+        Call this when the user or the app wants to change the value of the topic. The change is recorded in the command manager (then can be sent to the router).
         '''
-        context = self._command_manager.Record(allow_already_recording=True) if self._command_manager is not None else contextlib.nullcontext()
-        with context:
+        if self._command_manager is None:
             self.ApplyChange(change)
+            return
+        
+        assert self._get_topic_by_name is not None
+        with self._command_manager.Record(allow_already_recording=True):
+            self._command_manager.Add(ChangeCommand(self._get_topic_by_name,self._name,change))
 
     '''
     Shortcuts
@@ -75,13 +101,13 @@ class StringTopic(Topic):
     '''
     String topic
     '''
-    def __init__(self,name,client:ChatroomClient):
-        super().__init__(name,client)
+    def __init__(self,name,on_register_child=None,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
+        super().__init__(name,on_register_child,get_topic_by_name,command_manager)
         self.on_set = Action()
     
     def Set(self, value):
         change = StringChangeTypes.SetChange(value)
-        self.UpdateByUser(change)
+        self.ApplyChangeExternal(change)
 
     def _NotifyListeners(self,change:Change, old_value, new_value):
         if isinstance(change,StringChangeTypes.SetChange):
@@ -93,23 +119,23 @@ class UListTopic(Topic):
     '''
     Unordered list topic
     '''
-    def __init__(self,name,client:ChatroomClient):
-        super().__init__(name,client)
+    def __init__(self,name,on_register_child=None,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
+        super().__init__(name,on_register_child,get_topic_by_name,command_manager)
         self.on_set = Action()
         self.on_append = Action()
         self.on_remove = Action()
     
     def Set(self, value):
         change = UListChangeTypes.SetChange(value)
-        self.UpdateByUser(change)
+        self.ApplyChangeExternal(change)
 
     def Append(self, item):
         change = UListChangeTypes.AppendChange(item)
-        self.UpdateByUser(change)
+        self.ApplyChangeExternal(change)
 
     def Remove(self, item):
         change = UListChangeTypes.RemoveChange(item)
-        self.UpdateByUser(change)        
+        self.ApplyChangeExternal(change)        
 
     def __getitem__(self, index):
         return copy.deepcopy(self._value[index])

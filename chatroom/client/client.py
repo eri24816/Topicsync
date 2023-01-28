@@ -8,20 +8,20 @@ from collections import defaultdict
 from chatroom import logger
 import threading
 
-from chatroom.topic import StringTopic, Topic
+from chatroom.topic import StringTopic, Topic, UListTopic, TopicFactory
 from chatroom.client.request import Request
 from chatroom.utils import MakeMessage, ParseMessage
-from chatroom.command import CommandManager
+from chatroom.command import ChangeCommand, CommandManager
 
 # to stop pylance complaning
 from websockets.client import connect as ws_connect
 
 class ChatroomClient:
-    message_types = []
-    def __init__(self,host="localhost",port=8765,start=False,log_prefix="client"):
+    def __init__(self,host="localhost",port=8765,start=True,log_prefix="client"):
         self._host = f'ws://{host}:{port}'
         self._topics:Dict[str,Topic] = {}
         self._command_manager = CommandManager(on_recording_stop=self._OnRecordingStop)
+        self._preview_path : List[ChangeCommand] = []
         self._client_id = None
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self.request_pool:Dict[str,Request] = {}
@@ -30,13 +30,22 @@ class ChatroomClient:
         self._message_handlers:Dict[str,Callable] = {}
         for message_type in ['hello','update','request','response','reject_update']:
             self._message_handlers[message_type] = getattr(self,'_handle_'+message_type)
+        
+        self._root_topic = None
 
         if start:
             self.Start()
 
+
     def __del__(self):
         print("Client deleted")
         self.Stop()
+
+    def _InitializeTopics(self):
+        '''
+        Initialize the root topic
+        '''
+        self._root_topic = self._AddTopicAndTrackChildren('','string')
 
     def _ThreadedStart(self):
         '''
@@ -54,6 +63,7 @@ class ChatroomClient:
         Run send and receive loops
         '''
         self._logger.Info("Chatroom client started")
+        self._InitializeTopics()
         await asyncio.gather(self._ReceivingLoop(),self._SendingLoop(),loop=self._event_loop)
 
     async def _Connect(self):
@@ -95,18 +105,46 @@ class ChatroomClient:
         '''
         self._event_loop.call_soon_threadsafe(self._sending_queue.put_nowait,message)
 
-    def _SendToServer(self,*args,**kwargs):
+    def _SendToRouter(self,*args,**kwargs):
         '''
         Send a message to the server
         '''
         message = MakeMessage(*args,**kwargs)
         self._SendToServerRaw(message)
 
-    def _OnRecordingStop(self,commands):
+    '''
+    ================================
+    Callbacks
+    ================================
+    '''
+
+    def _OnRecordingStop(self,recorded_commands):
         '''
-        Called when the command manager stops recording
+        Called when the command manager finishes recording
         '''
-        #TODO: send commands to server
+        command_dicts = [command.Serialize() for command in recorded_commands]
+        self._SendToRouter('client_update',changes = command_dicts)
+        self._command_manager.Commit()
+        self._preview_path += recorded_commands
+
+    def _OnRegisterChild(self,parent_topic,base_name,type):
+        '''
+        Called when a child topic is registered
+        '''
+        if f'{parent_topic._name}/{base_name}' in self._topics: # already subscribed
+            return self._topics[f'{parent_topic._name}/{base_name}']
+
+        try:
+            children_list = self._topics[f'/_cr/children/{parent_topic._name}']
+        except KeyError:
+            raise ValueError(f'You can\'t create a child of topic {parent_topic._name}')
+        assert isinstance(children_list,UListTopic)
+
+        if {'name':base_name,'type':type} not in children_list.GetValue(): # not exist
+            children_list.Append({'name':base_name,'type':type})
+
+        return self._AddTopicAndTrackChildren(f'{parent_topic._name}/{base_name}',type)
+
     '''
     ================================
     Internal API functions
@@ -125,7 +163,7 @@ class ChatroomClient:
         Handle a request from another client
         '''
         response = self.service_pool[service_name](**args)
-        self._SendToServer("response",response = response,request_id = request_id)
+        self._SendToRouter("response",response = response,request_id = request_id)
 
     def _handle_response(self,request_id,response):
         '''
@@ -134,27 +172,66 @@ class ChatroomClient:
         request = self.request_pool.pop(request_id)
         request.on_response(response)
 
-    def _handle_update(self,topic_name,change):
+    def _handle_update(self,changes):
         '''
         Handle an update message from the server
         '''
-        topic = self._topics[topic_name]
-        change = topic.DeserializeChange(change)
-        if change.id == self._command_manager.recorded_commands[0].change.id:
-            self._command_manager.recorded_commands.pop(0)
-        else:
-            self._command_manager.Reset()
-            topic.ApplyChange(change)
+        for item in changes:
+            topic_name, change_dict = item['topic_name'], item['change']
+            topic = self._topics[topic_name]
+            change = topic.DeserializeChange(change_dict)
+
+            if len(self._preview_path)>0 and change.id == self._preview_path[0].change.id:
+                self._preview_path.pop(0)
+            else:
+                self.UndoAll(self._preview_path)
+                self._preview_path = []
+                topic.ApplyChange(change)
 
     def _handle_reject_update(self,topic_name,change,reason):
         '''
         Handle a rejected update from the server
         '''
         self._logger.Warning(f"Update rejected for topic {topic_name}: {reason}")
-        recorded = self._command_manager.recorded_commands
-        if len(recorded)>0 and change.id == recorded[0].change.id:
-            self._command_manager.Reset()
+        if len(self._preview_path)>0 and change.id == self._preview_path[0].change.id:
+            self.UndoAll(self._preview_path)
+            self._preview_path = []
 
+    '''
+    ================================
+    Topic functions
+    ================================
+    '''
+    def _AddTopic(self,name,type):
+        topic = self._topics[name] = TopicFactory(name,type,self._OnRegisterChild,lambda name: self._topics[name],self._command_manager)
+        self._SendToRouter('subscribe',topic_name=name)
+        self._logger.Debug(f"Added topic {name} of type {type}")
+        return topic
+    
+    def _AddTopicAndTrackChildren(self,name,type):
+        self._AddTopic(name,type)
+        children_list = self._AddTopic(f'/_cr/children/{name}','u_list')
+        assert isinstance(children_list,UListTopic)
+        children_list.on_append += lambda data: self._OnChildrenListAppend(name,data)
+        children_list.on_remove += lambda data: self._OnChildrenListRemove(name,data)
+        
+        return self._topics[name]
+
+    def _OnChildrenListAppend(self,parent_name,data):
+        pass # Do nothing because the added topic will be created in _OnRegisterChild.
+
+    def _RemoveTopic(self,name):
+        del self._topics[name]
+        self._SendToRouter('unsubscribe',topic_name=name)
+        self._logger.Debug(f"Removed topic {name}")
+
+    def _RemoveTopicAndUntrackChildren(self,name):
+        self._RemoveTopic(name)
+        self._RemoveTopic(f'/_cr/children/{name}')
+
+    def _OnChildrenListRemove(self,parent_name,data):
+        name = data['name']
+        self._RemoveTopicAndUntrackChildren(f'{parent_name}/{name}')
 
     '''
     ================================
@@ -178,32 +255,12 @@ class ChatroomClient:
         '''
         asyncio.run(self._ws.close())
         self.thread.join()
-
-    T = TypeVar('T',bound=Topic)
-    def RegisterTopic(self,type:Type[T],topic_name)->T:
-        '''
-        Returns a topic object for user-side use.
-        The method will send "subscribe" message to the server if the topic is not in the client yet.
-        If the topic is already created in the server, the server will send an update message to the client.
-        If the topic is not created in the server, the server will create the topic and send an update message to the client.
-        Note that the newly created topic will have a default value until the server sends back the update message.
-        '''
-        if topic_name in self._topics:
-            topic = self._topics[topic_name]
-            assert isinstance(topic,type)
-            return topic
-        
-        topic = type(topic_name,self)
-        
-        self._topics[topic_name] = topic
-        self._SendToServer("subscribe",topic_name=topic_name,type=topic.GetTypeName())
-        return topic
     
     def DeleteTopic(self,topic_name):
         '''
         Delete a topic
         '''
-        self._SendToServer("delete_topic",topic_name=topic_name)
+        self._SendToRouter("delete_topic",topic_name=topic_name)
 
     def MakeRequest(self,service_name:str,args:Dict,on_response:Callable):
         '''
@@ -212,7 +269,7 @@ class ChatroomClient:
         id = str(uuid.uuid4())
         request = Request(id,on_response)
         self.request_pool[id] = request
-        self._SendToServer("request",service_name=service_name,args=args,request_id=id)
+        self._SendToRouter("request",service_name=service_name,args=args,request_id=id)
         return request
 
     def RegisterService(self,service_name:str,service:Callable):
@@ -220,21 +277,20 @@ class ChatroomClient:
         Register a service
         '''
         self.service_pool[service_name] = service
-        self._SendToServer("register_service",service_name=service_name)
+        self._SendToRouter("register_service",service_name=service_name)
 
-    # called by the topic class =================================
+    def GetRootTopic(self):
+        '''
+        Get the root topic
+        '''
+        return self._topics['']
 
-    def UpdateSingle(self,topic_name,change):
+    '''
+    Shortcut functions
+    '''
+    def UndoAll(self,commands:List[ChangeCommand]):
         '''
-        Update a topic.
+        Undo all changes
         '''
-        changes = [{'topic_name':topic_name,'change':change}]
-        self._SendToServer("client_update",changes=changes)
-
-    def Unsubscribe(self,topic_name):
-        '''
-        Unsubscribe from a topic
-        '''
-        self._SendToServer("unsubscribe",topic_name=topic_name)
-        self._topics.pop(topic_name)
-
+        for command in reversed(commands):
+            command.Undo()
