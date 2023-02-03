@@ -41,13 +41,10 @@ class ChatroomRouter:
         self._endpoints : Dict[int,Endpoint] = {0:server}
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
         self._evnt = EventManager()
-        self._subscriptions : Dict[str,List[Endpoint]] = defaultdict(list)
         
         self._message_handlers:Dict[str,Callable] = {}
         for message_type in ['request','response','register_service','unregister_service','subscribe','client_update','unsubscribe','update','reject_update']:
             self._message_handlers[message_type] = getattr(self,'handle_'+message_type)
-        
-        self.root_topic = self._AddTopicAndTrackChildren('','string')
 
         self._thread = None
         if start_thread:
@@ -61,10 +58,11 @@ class ChatroomRouter:
         '''
         Handle a client connection. 
         '''
-        client = WSEndpoint(ws,self._logger)
         try:
             client_id = next(self._client_id_count)
+            client = WSEndpoint(client_id,ws,self._logger)
             self._endpoints[client_id] = client
+            client.id = client_id
             self._logger.Info(f"Client {client_id} connected")
             await client.Send("hello",id=client_id)
 
@@ -82,8 +80,8 @@ class ChatroomRouter:
             self._logger.Info(f"Client {client_id} disconnected")
             # clear subscriptions
             for topic in self._topics.values():
-                if client in self._SubscribersOf(topic):
-                    self._RemoveSubscriber(topic,client)
+                if client in topic.subscribers:
+                    topic.subscribers.remove(client)
             del self._endpoints[client_id]
 
     async def _ServerReceiveLoop(self):
@@ -132,9 +130,17 @@ class ChatroomRouter:
             return
         del self._services[service_name]
 
-    async def handle_subscribe(self,sender,topic_name):
-        self._AddSubscriber(topic_name,sender)
-        await sender.Send("update",changes=[{'topic_name':topic_name,'change':SetChange(self._topics[topic_name].GetValue()).Serialize()}])
+    async def handle_subscribe(self,sender,topic_name,type):
+        if topic_name not in self._topics:
+            topic = self._topics[topic_name] = TopicFactory(topic_name,type)
+            topic.subscribers.append(sender)
+        else:
+            topic = self._topics[topic_name]
+            topic.subscribers.append(sender)
+            if type != topic.GetTypeName():
+                self._logger.Error(f"Topic {topic_name} already exists with a different type")
+                return
+        await sender.Send("update",changes=[{'topic_name':topic_name,'change':SetChange(topic.GetValue()).Serialize()}])
 
     async def handle_client_update(self,sender,changes):
         
@@ -144,18 +150,38 @@ class ChatroomRouter:
                 self._logger.Error(f"Topic {topic_name} does not exist")
                 return
         
-        self._server.Send("client_update",client=sender,changes = changes)
+        forward_list = []
+        reflect_list = []
+
+        for item in changes:
+            topic_name = item['topic_name']
+            topic = self._topics[topic_name]
+            if self._server in topic.subscribers:
+                forward_list.append(item)
+            else:
+                reflect_list.append(item)
+        
+        if len(forward_list) > 0:
+            await self._server.Send("client_update",client_id=sender.id,changes = forward_list)
+        
+        if len(reflect_list) > 0:
+            await self.handle_update(None,reflect_list)
+        
 
     async def handle_unsubscribe(self,sender,topic_name):
         '''
         Remove a client from a topic subscription.
         '''
-        self._RemoveSubscriber(topic_name,sender)
+        topic = self._topics[topic_name]
+        topic.subscribers.remove(sender)
+        if len(topic.subscribers) == 0:
+            del self._topics[topic_name]
 
-    async def handle_reject_update(self,sender,client,topic_name,change,reason):
+    async def handle_reject_update(self,sender,client_id,topic_name,change,reason):
         '''
         The server rejects the update. The client should handle this message.
         '''
+        client = self._endpoints[client_id]
         await client.Send("reject_update",topic_name=topic_name,change=change,reason=reason)
 
     async def handle_update(self,sender,changes):
@@ -168,7 +194,9 @@ class ChatroomRouter:
             topic = self._topics[topic_name]
             change = topic.DeserializeChange(change_dict)
             topic.ApplyChange(change)
-            for client in self._SubscribersOf(topic):
+            for client in topic.subscribers:
+                if client == self._server:
+                    continue
                 await client.Send("update",changes = [item]) #TODO: optimize this
 
     '''
@@ -186,53 +214,7 @@ class ChatroomRouter:
         await provider.Send("request",service_name=service_name,args=args,request_id=request_id)
         response = await self._evnt.Wait(f'response_waiter{request_id}')
         return response
-    
-    
-    def _AddTopic(self,name,type):
-        topic = self._topics[name] = TopicFactory(name,type)
-        self._logger.Debug(f"Added topic {name}")
-        return topic
-    
-    def _AddTopicAndTrackChildren(self,name,type):
-        self._AddTopic(name,type)
-        children_list = self._AddTopic(f'/_cr/children/{name}','u_list')
-        assert isinstance(children_list,UListTopic)
-        children_list.on_append += lambda data: self._OnChildrenListAppend(name,data)
-        children_list.on_remove += lambda data: self._OnChildrenListRemove(name,data)
 
-
-    def _OnChildrenListAppend(self,parent_name,data):
-        name = f'{parent_name}/{data["name"]}'
-        type = data['type']
-        self._AddTopicAndTrackChildren(name,type)
-
-    def _RemoveTopic(self,name):
-        del self._topics[name]
-        del self._subscriptions[name]
-        self._logger.Debug(f"Removed topic {name}")
-
-    def _RemoveTopicAndUntrackChildren(self,name):
-        self._RemoveTopic(name)
-        self._RemoveTopic(f'/_cr/children/{name}')
-
-    def _OnChildrenListRemove(self,parent_name,data):
-        name = data['name']
-        self._RemoveTopicAndUntrackChildren(f'{parent_name}/{name}')
-
-    def _AddSubscriber(self,topic,subscriber):
-        if isinstance(topic,Topic):
-            topic = topic.GetName()
-        self._subscriptions[topic].append(subscriber)
-    
-    def _RemoveSubscriber(self,topic,subscriber):
-        if isinstance(topic,Topic):
-            topic = topic.GetName()
-        self._subscriptions[topic].remove(subscriber)
-
-    def _SubscribersOf(self,topic):
-        if isinstance(topic,Topic):
-            topic = topic.GetName()
-        return self._subscriptions[topic]
     '''
     ================================
     Public functions

@@ -10,7 +10,8 @@ import threading
 
 from chatroom.topic import StringTopic, Topic, UListTopic, TopicFactory
 from chatroom.client.request import Request
-from chatroom.utils import MakeMessage, ParseMessage
+from chatroom.topic_change import UListChangeTypes
+from chatroom.utils import MakeMessage, ParseMessage, WeakKeyDict
 from chatroom.command import ChangeCommand, CommandManager
 
 # to stop pylance complaning
@@ -19,8 +20,8 @@ from websockets.client import connect as ws_connect
 class ChatroomClient:
     def __init__(self,host="localhost",port=8765,start=True,log_prefix="client"):
         self._host = f'ws://{host}:{port}'
-        self._topics:Dict[str,Topic] = {}
-        self._command_manager = CommandManager(on_recording_stop=self._OnRecordingStop)
+        self._topics : WeakKeyDict[str,Topic] = WeakKeyDict(on_removed=self._OnTopicGarbageCollected)
+        self._command_manager = CommandManager(on_recording_stop=self._OnRecordingStop,on_add=self._OnAddCommand)
         self._preview_path : List[ChangeCommand] = []
         self._client_id = None
         self._logger = logger.Logger(logger.DEBUG,prefix=log_prefix)
@@ -31,7 +32,6 @@ class ChatroomClient:
         for message_type in ['hello','update','request','response','reject_update']:
             self._message_handlers[message_type] = getattr(self,'_handle_'+message_type)
         
-        self._root_topic = None
 
         if start:
             self.Start()
@@ -41,20 +41,14 @@ class ChatroomClient:
         print("Client deleted")
         self.Stop()
 
-    def _InitializeTopics(self):
-        '''
-        Initialize the root topic
-        '''
-        self._root_topic = self._AddTopicAndTrackChildren('','string')
-
     def _ThreadedStart(self):
         '''
         Run the client in a new thread
         '''
         self._event_loop = asyncio.new_event_loop()
         self._event_loop.run_until_complete(self._Connect())
-        self.connected_event.set()
         self._sending_queue = asyncio.Queue(loop=self._event_loop)
+        self.connected_event.set()
         self._event_loop.run_until_complete(self._Run())
         self._event_loop.run_forever()
         
@@ -63,7 +57,6 @@ class ChatroomClient:
         Run send and receive loops
         '''
         self._logger.Info("Chatroom client started")
-        self._InitializeTopics()
         await asyncio.gather(self._ReceivingLoop(),self._SendingLoop(),loop=self._event_loop)
 
     async def _Connect(self):
@@ -122,28 +115,30 @@ class ChatroomClient:
         '''
         Called when the command manager finishes recording
         '''
+        for command in recorded_commands:
+            print(command.change.Serialize())
+        for command in recorded_commands:
+            if isinstance(command.change,UListChangeTypes.SetChange):
+                if command.change.value == [5]:
+                    raise Exception("ageraegr")
         command_dicts = [command.Serialize() for command in recorded_commands]
         self._SendToRouter('client_update',changes = command_dicts)
         self._command_manager.Commit()
-        self._preview_path += recorded_commands
 
-    def _OnRegisterChild(self,parent_topic,base_name,type):
+    def _OnAddCommand(self,added_command:ChangeCommand):
         '''
-        Called when a child topic is registered
+        Called when the command manager adds a command
         '''
-        if f'{parent_topic._name}/{base_name}' in self._topics: # already subscribed
-            return self._topics[f'{parent_topic._name}/{base_name}']
+        if added_command.preview:
+            added_command.Execute()
+            self._preview_path.append(added_command)
 
-        try:
-            children_list = self._topics[f'/_cr/children/{parent_topic._name}']
-        except KeyError:
-            raise ValueError(f'You can\'t create a child of topic {parent_topic._name}')
-        assert isinstance(children_list,UListTopic)
-
-        if {'name':base_name,'type':type} not in children_list.GetValue(): # not exist
-            children_list.Append({'name':base_name,'type':type})
-
-        return self._AddTopicAndTrackChildren(f'{parent_topic._name}/{base_name}',type)
+    def _OnTopicGarbageCollected(self,topic_name):
+        '''
+        Called when a topic is garbage collected
+        '''
+        self._SendToRouter('unsubscribe',topic_name=topic_name)
+        self._logger.Debug(f"Removed topic {topic_name}")
 
     '''
     ================================
@@ -178,6 +173,9 @@ class ChatroomClient:
         '''
         for item in changes:
             topic_name, change_dict = item['topic_name'], item['change']
+            if topic_name not in self._topics: # This may happen when the client just unsubscribed from a topic.
+                self._logger.Warning(f"Update for unknown topic {topic_name}")
+                continue
             topic = self._topics[topic_name]
             change = topic.DeserializeChange(change_dict)
 
@@ -193,45 +191,9 @@ class ChatroomClient:
         Handle a rejected update from the server
         '''
         self._logger.Warning(f"Update rejected for topic {topic_name}: {reason}")
-        if len(self._preview_path)>0 and change.id == self._preview_path[0].change.id:
+        if len(self._preview_path)>0 and change['id'] == self._preview_path[0].change.id:
             self.UndoAll(self._preview_path)
             self._preview_path = []
-
-    '''
-    ================================
-    Topic functions
-    ================================
-    '''
-    def _AddTopic(self,name,type):
-        topic = self._topics[name] = TopicFactory(name,type,self._OnRegisterChild,lambda name: self._topics[name],self._command_manager)
-        self._SendToRouter('subscribe',topic_name=name)
-        self._logger.Debug(f"Added topic {name} of type {type}")
-        return topic
-    
-    def _AddTopicAndTrackChildren(self,name,type):
-        self._AddTopic(name,type)
-        children_list = self._AddTopic(f'/_cr/children/{name}','u_list')
-        assert isinstance(children_list,UListTopic)
-        children_list.on_append += lambda data: self._OnChildrenListAppend(name,data)
-        children_list.on_remove += lambda data: self._OnChildrenListRemove(name,data)
-        
-        return self._topics[name]
-
-    def _OnChildrenListAppend(self,parent_name,data):
-        pass # Do nothing because the added topic will be created in _OnRegisterChild.
-
-    def _RemoveTopic(self,name):
-        del self._topics[name]
-        self._SendToRouter('unsubscribe',topic_name=name)
-        self._logger.Debug(f"Removed topic {name}")
-
-    def _RemoveTopicAndUntrackChildren(self,name):
-        self._RemoveTopic(name)
-        self._RemoveTopic(f'/_cr/children/{name}')
-
-    def _OnChildrenListRemove(self,parent_name,data):
-        name = data['name']
-        self._RemoveTopicAndUntrackChildren(f'{parent_name}/{name}')
 
     '''
     ================================
@@ -279,11 +241,16 @@ class ChatroomClient:
         self.service_pool[service_name] = service
         self._SendToRouter("register_service",service_name=service_name)
 
-    def GetRootTopic(self):
-        '''
-        Get the root topic
-        '''
-        return self._topics['']
+    T = TypeVar('T',bound=Topic)
+    def RegisterTopic(self,topic_name,topic_type:type[T])->T:
+        if topic_name in self._topics:
+            topic = self._topics[topic_name]
+            assert isinstance(topic,topic_type)
+            return topic
+        topic = self._topics[topic_name] = topic_type(topic_name,lambda name: self._topics[name],self._command_manager)
+        self._SendToRouter('subscribe',topic_name=topic_name,type = topic_type.GetTypeName())
+        self._logger.Debug(f"Added topic {topic_name} of type {topic_type.__name__}")
+        return topic
 
     '''
     Shortcut functions

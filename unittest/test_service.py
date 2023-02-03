@@ -1,13 +1,15 @@
 import unittest
-from chatroom import ChatroomRouter, ChatroomClient
+from chatroom import ChatroomServer, ChatroomClient
 import time
+
+from utils import get_free_port
 
 class TestService(unittest.TestCase):
     def test_service(self):
-        server = ChatroomRouter(start_thread=True)
-        client1 = ChatroomClient(start=True,log_prefix="client1")
-        client2 = ChatroomClient(start=True,log_prefix="client2")
-
+        port = get_free_port()
+        server = ChatroomServer(port = port)
+        client1 = ChatroomClient(start=True,log_prefix="client1",port = port)
+        client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
         for i in range(10):
             def add_i(x,i=i):
                 return x + i

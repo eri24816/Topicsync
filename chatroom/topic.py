@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import deque
 import contextlib
 import copy
-from typing import Any, Deque, Dict, Tuple
+from typing import Any, Deque, Dict, Tuple, Type
 from typing import Callable, List, TYPE_CHECKING, Optional
 from itertools import count
 from chatroom.command import ChangeCommand
@@ -13,11 +13,11 @@ from chatroom.topic_change import Change, InvalidChangeException, StringChangeTy
 from chatroom.utils import Action, camel_to_snake
 import abc
 
-def TopicFactory(topic_name:str,type:str,on_register_child=None,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None) -> Topic:
+def TopicFactory(topic_name:str,type:str,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None) -> Topic:
     if type == 'string':
-        return StringTopic(topic_name,on_register_child,get_topic_by_name,command_manager)
+        return StringTopic(topic_name,get_topic_by_name,command_manager)
     if type == 'u_list':
-        return UListTopic(topic_name,on_register_child,get_topic_by_name,command_manager)
+        return UListTopic(topic_name,get_topic_by_name,command_manager)
     raise ValueError(f'Unknown topic type {type}')
 
 class Topic(metaclass = abc.ABCMeta):
@@ -25,13 +25,14 @@ class Topic(metaclass = abc.ABCMeta):
     def GetTypeName(cls):
         return camel_to_snake(cls.__name__.replace('Topic',''))
     
-    def __init__(self,name,on_register_child:Optional[Callable[[Topic,str,str],Topic]]=None,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None):
+    def __init__(self,name,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None):
         self._name = name
         self._value = default_topic_value[self.GetTypeName()]
-        self._on_register_child = on_register_child
-        self._verify_change :Optional[Callable[[Any,Any,Change],Topic]] = None
+        self._validators : List[Callable[[Any,Any,Change],bool]] = []
         self._get_topic_by_name = get_topic_by_name
         self._command_manager = command_manager
+        self._no_preview_change_types : List[Type[Change]] = []
+        self.subscribers = []
 
     def __del__(self):
         #TODO unsubscribe if here is client
@@ -47,9 +48,23 @@ class Topic(metaclass = abc.ABCMeta):
     def GetValue(self):
         return copy.deepcopy(self._value)
     
-    def RegisterChild(self,base_name:str,type:str):
-        assert self._on_register_child is not None
-        return self._on_register_child(self,base_name,type)
+    def AddValidator(self,validator:Callable[[Any,Any,Change],bool]):
+        '''
+        Add a validator to the topic. The validator is a function that takes the old value, new value and the change as arguments and returns True if the change is valid and False otherwise.
+        '''
+        self._validators.append(validator)
+
+    def DisablePreview(self,change_type:Optional[Type[Change]]):
+        if change_type is None:
+            self._no_preview_change_types = list(Change.__subclasses__())
+        else:
+            self._no_preview_change_types.append(change_type)
+
+    def EnablePreview(self,change_type:Optional[Type[Change]]):
+        if change_type is None:
+            self._no_preview_change_types = []
+        else:
+            self._no_preview_change_types.remove(change_type)
         
     '''
     Abstract/virtual methods
@@ -67,16 +82,23 @@ class Topic(metaclass = abc.ABCMeta):
     def SetChildrenList(self,children_list:UListTopic):
         self._children_list = children_list
 
+    def ValidateChangeAndGetResult(self,change:Change):
+        old_value = self._value
+        new_value = change.Apply(copy.deepcopy(self._value))
+
+        for validator in self._validators:
+            if not validator(old_value,new_value,change):
+                raise InvalidChangeException(f'Change {change.Serialize()} is not valid for topic {self._name}. Old value: {old_value}, invalid new value: {new_value}')
+        
+        return new_value
+
     def ApplyChange(self, change:Change):
         '''
         Set the value and notify listeners. Note that this method does not record the change in the command manager. Use ApplyChangeExternal instead.
         '''
         old_value = self._value
-        self._value = change.Apply(copy.deepcopy(self._value))
-        if self._verify_change is not None:
-            if not self._verify_change(old_value,self._value,change):
-                self._value = old_value
-                raise InvalidChangeException(f'Change {change.Serialize()} is not valid for topic {self._name}')
+        new_value = self.ValidateChangeAndGetResult(change)
+        self._value = new_value
         self._NotifyListeners(change,old_value=old_value,new_value=self._value)
 
     def ApplyChangeExternal(self, change:Change):
@@ -86,10 +108,13 @@ class Topic(metaclass = abc.ABCMeta):
         if self._command_manager is None:
             self.ApplyChange(change)
             return
+
+        self.ValidateChangeAndGetResult(change)
         
+        preview = type(change) not in self._no_preview_change_types # this value is only used in the client
         assert self._get_topic_by_name is not None
         with self._command_manager.Record(allow_already_recording=True):
-            self._command_manager.Add(ChangeCommand(self._get_topic_by_name,self._name,change))
+            self._command_manager.Add(ChangeCommand(self._get_topic_by_name,self._name,change,preview=preview))
 
     '''
     Shortcuts
@@ -101,8 +126,8 @@ class StringTopic(Topic):
     '''
     String topic
     '''
-    def __init__(self,name,on_register_child=None,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
-        super().__init__(name,on_register_child,get_topic_by_name,command_manager)
+    def __init__(self,name,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
+        super().__init__(name,get_topic_by_name,command_manager)
         self.on_set = Action()
     
     def Set(self, value):
@@ -119,8 +144,18 @@ class UListTopic(Topic):
     '''
     Unordered list topic
     '''
-    def __init__(self,name,on_register_child=None,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
-        super().__init__(name,on_register_child,get_topic_by_name,command_manager)
+    @staticmethod
+    def NoRepeatsValidator(old_value,new_value,change):
+        if isinstance(change,UListChangeTypes.AppendChange):
+            if change.item in old_value:
+                return False
+        elif isinstance(change,UListChangeTypes.SetChange):
+            if len(change.value) != len(set(change.value)):
+                return False
+        return True
+    
+    def __init__(self,name,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
+        super().__init__(name,get_topic_by_name,command_manager)
         self.on_set = Action()
         self.on_append = Action()
         self.on_remove = Action()
@@ -146,10 +181,19 @@ class UListTopic(Topic):
     def _NotifyListeners(self,change:Change, old_value, new_value):
         if isinstance(change,UListChangeTypes.SetChange):
             self.on_set(new_value)
-            for item in old_value:
+            
+            removed_items = copy.deepcopy(old_value)
+            added_items = copy.deepcopy(new_value)
+            
+            for item in removed_items:
+                if item in added_items:
+                    added_items.remove(item)
+                    removed_items.remove(item)
+            for item in removed_items:
                 self.on_remove(item)
-            for item in new_value:
+            for item in added_items:
                 self.on_append(item)
+
         elif isinstance(change,UListChangeTypes.AppendChange):
             self.on_set(new_value)
             self.on_append(change.item)

@@ -1,4 +1,7 @@
 from __future__ import annotations
+import copy
+
+from chatroom import logger
 '''
 Change is a class that represents a change to a topic. It can be serialized and be passed between clients and the server.
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).
@@ -45,18 +48,20 @@ class Change:
         '''
         return Change()
 
+id_ = id
 class SetChange(Change):
     def __init__(self, value,old_value=None,id=None):
         super().__init__(id)
+        assert value != [5]
         self.value = value
         self.old_value = old_value
     def Apply(self, old_value):
         self.old_value = old_value
-        return self.value
+        return copy.deepcopy(self.value)
     def Serialize(self):
         return {"type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
     def Inverse(self)->Change:
-        return self.__class__(self.old_value,self.value)
+        return self.__class__(copy.deepcopy(self.old_value),copy.deepcopy(self.value))
 
 class StringChangeTypes:
     class SetChange(SetChange):
@@ -91,7 +96,7 @@ class UListChangeTypes:
             self.item = item
         def Apply(self, old_value):
             if self.item not in old_value:
-                raise InvalidChangeException(f'{self.item} is not in {old_value}')
+                raise InvalidChangeException(f'Cannot remove {self.item} from {old_value}')
             old_value.remove(self.item)
             return old_value
         def Serialize(self):

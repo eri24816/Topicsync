@@ -1,6 +1,7 @@
 import asyncio
 import json
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import typing
 
 class EventWithData(asyncio.Event):
     def __init__(self):
@@ -55,28 +56,26 @@ class Action:
         for callback in self._callbacks:
             callback(*args,**kwargs)
 
-class ActionGroup:
+import weakref
+_KT = typing.TypeVar("_KT") #  key type
+_VT = typing.TypeVar("_VT") #  value type
+class WeakKeyDict(weakref.WeakValueDictionary[_KT, _VT]):
     '''
-    A group of specific number of actions. When using _add_ or _sub_, you need to pass in a list of callbacks for each action.
+    It is weakref.WeakValueDictionary but calls a callback when an item is removed. The callback is called with the key of the removed item.
     '''
-    def __init__(self,n:int):
-        self._actions:List[Action] = [Action() for _ in range(n)]
-    
-    def __getitem__(self,index):
-        return self._actions[index]
-    
-    def __len__(self):
-        return len(self._actions)
-    
-    def __add__(self,callbacks:List[Callable]):
-        for action,callback in zip(self._actions,callbacks):
-            action += callback
-        return self
-    
-    def __sub__(self,callbacks:List[Callable]):
-        for action,callback in zip(self._actions,callbacks):
-            action -= callback
-        return self
+    def __init__(self, on_removed:Optional[Callable[[str],None]]=None):
+        super().__init__()
+        self.cb = on_removed
+
+        def new_remove(el:weakref.KeyedRef, selfref=weakref.ref(self)):
+            self = selfref()
+            if self is not None:
+                if self.cb is not None:
+                    self.cb(el.key)
+                self._old_remove(el)
+
+        self._old_remove = self._remove
+        self._remove = new_remove
 
     
 def camel_to_snake(name):

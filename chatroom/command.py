@@ -8,8 +8,8 @@ if TYPE_CHECKING:
 
 
 class Command:
-    def __init__(self) -> None:
-        pass
+    def __init__(self,preview = False) -> None:
+        self.preview = preview
     def Execute(self):
         raise NotImplementedError
     def Undo(self):
@@ -18,8 +18,8 @@ class Command:
         raise NotImplementedError
 
 class ChangeCommand(Command):
-    def __init__(self,get_topic_by_name:Callable[[str],Topic],topic_name,change:Change) -> None:
-        super().__init__()
+    def __init__(self,get_topic_by_name:Callable[[str],Topic],topic_name,change:Change,preview=False) -> None:
+        super().__init__(preview)
         self.get_topic_by_name = get_topic_by_name
         self.topic_name = topic_name # Note the topic name is stored to avoid reference to a topic object to be deleted. #TODO: test this
         self.change = change
@@ -48,10 +48,11 @@ class CommandManager:
             self._command_manager.StopRecording()
         
         
-    def __init__(self,on_recording_stop = lambda recorded_commands:None) -> None:
+    def __init__(self,on_recording_stop = lambda recorded_commands:None, on_add = lambda added_command:added_command.Execute()) -> None:
         self.recorded_commands: list[ChangeCommand] = []
         self._is_recording = False
         self._on_recording_stop = on_recording_stop
+        self._on_add = on_add
 
     def StartRecording(self):
         self._is_recording = True
@@ -70,7 +71,7 @@ class CommandManager:
     
 
     def Add(self,command:ChangeCommand):
-        command.Execute()
+        self._on_add(command)
         if self._is_recording:
             self.recorded_commands.append(command)
 

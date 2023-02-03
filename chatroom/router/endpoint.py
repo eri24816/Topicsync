@@ -2,6 +2,8 @@ import asyncio
 from chatroom.utils import MakeMessage
 
 class Endpoint:
+    def __init__(self,id:int):
+        self.id = id
     async def Send(self,*args,**kwargs):
         '''
         Send a message to the endpoint
@@ -9,7 +11,8 @@ class Endpoint:
         raise NotImplementedError
 
 class WSEndpoint(Endpoint):
-    def __init__(self,ws,logger):
+    def __init__(self,id,ws,logger):
+        super().__init__(id)
         self._ws = ws
         self._logger = logger
 
@@ -21,7 +24,8 @@ class WSEndpoint(Endpoint):
         await self._SendRaw(MakeMessage(*args,**kwargs))
 
 class PythonEndpoint(Endpoint):
-    def __init__(self,target):
+    def __init__(self,id,target):
+        super().__init__(id)
         self._event_loop = None
         self._target = target
         self.queue_to_router = None
@@ -30,7 +34,7 @@ class PythonEndpoint(Endpoint):
         self._event_loop = event_loop
         self.queue_to_router = asyncio.Queue(loop=event_loop)
 
-    def Send(self,message_type,*args,**kwargs):
+    async def Send(self,message_type,*args,**kwargs):
         method = getattr(self._target,'_handle_'+message_type)
         method(*args,**kwargs)
 
