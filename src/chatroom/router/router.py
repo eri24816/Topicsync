@@ -76,11 +76,10 @@ class ChatroomRouter:
                     pass
 
         except ws_exceptions.ConnectionClosed as e:
-            self._logger.Info(f"Client {client_id} disconnected: {e}")
+            self._logger.Info(f"Client {client_id} disconnected: {e.with_traceback(e.__traceback__)}")
             self._CleanUpClient(client)
         except Exception as e:
-            self._logger.Error(f"Error handling client {client_id}: {e}")
-            print(e.with_traceback(e.__traceback__))
+            self._logger.Error(f"Error handling client {client_id}: {e.with_traceback(e.__traceback__)}")
 
     async def _ServerReceiveLoop(self):
         while True:
@@ -98,12 +97,11 @@ class ChatroomRouter:
         for topic in self._topics.values():
             if client in topic.subscribers:
                 topic.subscribers.remove(client)
+        # clear services
         for service_name,service in self._services.copy().items():
             if client == service.provider:
-                self._logger.Info(f"Service {service_name} unregistered")
+                self._logger.Debug(f"Service {service_name} unregistered")
                 del self._services[service_name]
-            else:
-                print(f"Service provider not client {service} {client}")
         del self._endpoints[client.id]
     '''
     ================================
