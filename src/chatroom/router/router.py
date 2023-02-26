@@ -16,7 +16,7 @@ from chatroom.router.endpoint import Endpoint, WSEndpoint
 from chatroom.utils import EventManager
 from chatroom.topic_change import SetChange
 
-from chatroom.topic import TopicFactory, Topic, UListTopic
+from chatroom.topic import TopicFactory, Topic, SetTopic
 from .service import Service, Request
 import json
 from itertools import count

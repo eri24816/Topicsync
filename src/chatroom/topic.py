@@ -9,15 +9,15 @@ from chatroom.command import ChangeCommand
 if TYPE_CHECKING:
     from .client.client import ChatroomClient
     from .command import CommandManager
-from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, UListChangeTypes, default_topic_value
+from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, SetChangeTypes, default_topic_value
 from chatroom.utils import Action, camel_to_snake
 import abc
 
 def TopicFactory(topic_name:str,type:str,get_topic_by_name:Optional[Callable[[str],Topic]]=None,command_manager:Optional[CommandManager]=None) -> Topic:
     if type == 'string':
         return StringTopic(topic_name,get_topic_by_name,command_manager)
-    if type == 'u_list':
-        return UListTopic(topic_name,get_topic_by_name,command_manager)
+    if type == 'set':
+        return SetTopic(topic_name,get_topic_by_name,command_manager)
     raise ValueError(f'Unknown topic type {type}')
 
 class Topic(metaclass = abc.ABCMeta):
@@ -137,19 +137,10 @@ class StringTopic(Topic):
         else:
             raise Exception(f'Unsupported change type {type(change)} for StringTopic')
 
-class UListTopic(Topic):
+class SetTopic(Topic):
     '''
     Unordered list topic
     '''
-    @staticmethod
-    def NoRepeatsValidator(old_value,new_value,change):
-        if isinstance(change,UListChangeTypes.AppendChange):
-            if change.item in old_value:
-                return False
-        elif isinstance(change,UListChangeTypes.SetChange):
-            if len(change.value) != len(set(change.value)):
-                return False
-        return True
     
     def __init__(self,name,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
         super().__init__(name,get_topic_by_name,command_manager)
@@ -158,44 +149,36 @@ class UListTopic(Topic):
         self.on_remove = Action()
     
     def Set(self, value):
-        change = UListChangeTypes.SetChange(value)
+        change = SetChangeTypes.SetChange(value)
         self.ApplyChangeExternal(change)
 
     def Append(self, item):
-        change = UListChangeTypes.AppendChange(item)
+        change = SetChangeTypes.AppendChange(item)
         self.ApplyChangeExternal(change)
 
     def Remove(self, item):
-        change = UListChangeTypes.RemoveChange(item)
+        change = SetChangeTypes.RemoveChange(item)
         self.ApplyChangeExternal(change)        
-
-    def __getitem__(self, index):
-        return copy.deepcopy(self._value[index])
     
     def __len__(self):
         return len(self._value)
 
     def _NotifyListeners(self,change:Change, old_value, new_value):
-        if isinstance(change,UListChangeTypes.SetChange):
+        if isinstance(change,SetChangeTypes.SetChange):
             self.on_set(new_value)
             
-            removed_items = copy.deepcopy(old_value)
-            added_items = copy.deepcopy(new_value)
-            
-            for item in removed_items:
-                if item in added_items:
-                    added_items.remove(item)
-                    removed_items.remove(item)
+            removed_items = set(old_value) - set(new_value)
+            added_items = set(new_value) - set(old_value)
             for item in removed_items:
                 self.on_remove(item)
             for item in added_items:
                 self.on_append(item)
 
-        elif isinstance(change,UListChangeTypes.AppendChange):
+        elif isinstance(change,SetChangeTypes.AppendChange):
             self.on_set(new_value)
             self.on_append(change.item)
-        elif isinstance(change,UListChangeTypes.RemoveChange):
+        elif isinstance(change,SetChangeTypes.RemoveChange):
             self.on_set(new_value)
             self.on_remove(change.item)
         else:
-            raise Exception(f'Unsupported change type {type(change)} for UListTopic')
+            raise Exception(f'Unsupported change type {type(change)} for SetTopic')

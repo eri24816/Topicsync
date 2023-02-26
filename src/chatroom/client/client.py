@@ -8,9 +8,9 @@ from collections import defaultdict
 from chatroom import logger
 import threading
 
-from chatroom.topic import StringTopic, Topic, UListTopic, TopicFactory
+from chatroom.topic import StringTopic, Topic, SetTopic, TopicFactory
 from chatroom.client.request import Request
-from chatroom.topic_change import UListChangeTypes
+from chatroom.topic_change import SetChangeTypes
 from chatroom.utils import MakeMessage, ParseMessage, WeakKeyDict
 from chatroom.command import ChangeCommand, CommandManager
 
@@ -118,7 +118,7 @@ class ChatroomClient:
         for command in recorded_commands:
             print(command.change.Serialize())
         for command in recorded_commands:
-            if isinstance(command.change,UListChangeTypes.SetChange):
+            if isinstance(command.change,SetChangeTypes.SetChange):
                 if command.change.value == [5]:
                     raise Exception("ageraegr")
         command_dicts = [command.Serialize() for command in recorded_commands]

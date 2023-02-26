@@ -17,7 +17,7 @@ default_topic_value = {
     'int':0,
     'float':0.0,
     'bool':False,
-    'u_list':[],
+    'set':[],
     'list':[],
 }
 
@@ -69,13 +69,10 @@ class StringChangeTypes:
     
     types = {'set':SetChange}
 
-class UListChangeTypes:
+class SetChangeTypes:
     class SetChange(SetChange):
         pass
     class AppendChange(Change):
-        '''
-        Append a value to a list. Apply() will append the value to the list inplace and return the list.
-        '''
         def __init__(self, item,id=None):
             super().__init__(id)
             self.item = item
@@ -85,12 +82,9 @@ class UListChangeTypes:
         def Serialize(self):
             return {"type":"append","item":self.item,"id":self.id}
         def Inverse(self)->Change:
-            return UListChangeTypes.RemoveChange(self.item)
+            return SetChangeTypes.RemoveChange(self.item)
         
     class RemoveChange(Change):
-        '''
-        Remove a value from a list. Apply() will remove the value from the list inplace and return the list.
-        '''
         def __init__(self, item,id=None):
             super().__init__(id)
             self.item = item
@@ -102,8 +96,8 @@ class UListChangeTypes:
         def Serialize(self):
             return {"type":"remove","item":self.item,"id":self.id}
         def Inverse(self)->Change:
-            return UListChangeTypes.AppendChange(self.item)
+            return SetChangeTypes.AppendChange(self.item)
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
-TypeNameToChangeTypes = {'string':StringChangeTypes,'u_list':UListChangeTypes}
+TypeNameToChangeTypes = {'string':StringChangeTypes,'set':SetChangeTypes}

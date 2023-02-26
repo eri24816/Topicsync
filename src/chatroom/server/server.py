@@ -3,10 +3,10 @@ from typing import Callable, Dict, List, TypeVar, Type
 
 from chatroom.router.router import ChatroomRouter
 from chatroom.router.endpoint import PythonEndpoint
-from chatroom.topic import StringTopic, Topic, UListTopic, TopicFactory
+from chatroom.topic import StringTopic, Topic, SetTopic, TopicFactory
 from chatroom.logger import Logger, DEBUG
 from ..command import ChangeCommand, CommandManager
-from chatroom.topic_change import Change, InvalidChangeException, UListChangeTypes
+from chatroom.topic_change import Change, InvalidChangeException, SetChangeTypes
 from chatroom.utils import WeakKeyDict
 
 import weakref

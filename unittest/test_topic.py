@@ -2,7 +2,7 @@ import unittest
 from chatroom import ChatroomServer, ChatroomClient
 import time
 
-from chatroom.topic import StringTopic, UListTopic
+from chatroom.topic import StringTopic, SetTopic
 from utils import get_free_port, Empty, random_combinations
 
 class TestTopic(unittest.TestCase):
@@ -129,23 +129,23 @@ class TestTopicChanges(unittest.TestCase):
         client2 = ChatroomClient(start=True,log_prefix="client2",port = port)
 
         control = []
-        ulist1 = client1.RegisterTopic('ulist',UListTopic)
-        ulist2 = client2.RegisterTopic('ulist',UListTopic)
+        set1 = client1.RegisterTopic('set',SetTopic)
+        set2 = client2.RegisterTopic('set',SetTopic)
 
         app1 = Empty(a=[],b=[])
         app2 = Empty(a=[],b=[])
 
         # on_set
-        def ulist1_set(x): app1.a = x
-        def ulist2_set(x): app2.a = x
-        ulist1.on_set += ulist1_set
-        ulist2.on_set += ulist2_set
+        def set1_set(x): app1.a = x
+        def set2_set(x): app2.a = x
+        set1.on_set += set1_set
+        set2.on_set += set2_set
 
         # on_add and on_remove
-        ulist1.on_append += lambda x: app1.b.append(x)
-        ulist1.on_remove += lambda x: app1.b.remove(x)
-        ulist2.on_append += lambda x: app2.b.append(x)
-        ulist2.on_remove += lambda x: app2.b.remove(x)
+        set1.on_append += lambda x: app1.b.append(x)
+        set1.on_remove += lambda x: app1.b.remove(x)
+        set2.on_append += lambda x: app2.b.append(x)
+        set2.on_remove += lambda x: app2.b.remove(x)
 
         def assert_equal(answer):
             answer = sorted(answer)
@@ -154,23 +154,23 @@ class TestTopicChanges(unittest.TestCase):
             self.assertEqual(sorted(app1.b), answer)
             self.assertEqual(sorted(app2.b), answer)
 
-        ulist1.Set([1,2,3])
+        set1.Set([1,2,3])
         time.sleep(0.1)
         assert_equal([1,2,3])
 
-        ulist1.Append(4)
-        ulist2.Append(5)
+        set1.Append(4)
+        set2.Append(5)
         time.sleep(0.1)
         assert_equal([1,2,3,4,5])
 
-        ulist1.Remove(1)
-        ulist2.Remove(2)
-        ulist2.Append(6)
-        ulist1.Remove(3)
+        set1.Remove(1)
+        set2.Remove(2)
+        set2.Append(6)
+        set1.Remove(3)
         time.sleep(0.1)
         assert_equal([4,5,6])
 
-        ulist2.Set([4,5,6])
+        set2.Set([4,5,6])
         time.sleep(0.1)
         assert_equal([4,5,6])
 
