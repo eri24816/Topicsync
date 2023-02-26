@@ -76,13 +76,11 @@ class ChatroomRouter:
                     pass
 
         except ws_exceptions.ConnectionClosed as e:
-            print(e)
-            self._logger.Info(f"Client {client_id} disconnected")
-            # clear subscriptions
-            for topic in self._topics.values():
-                if client in topic.subscribers:
-                    topic.subscribers.remove(client)
-            del self._endpoints[client_id]
+            self._logger.Info(f"Client {client_id} disconnected: {e}")
+            self._CleanUpClient(client)
+        except Exception as e:
+            self._logger.Error(f"Error handling client {client_id}: {e}")
+            print(e.with_traceback(e.__traceback__))
 
     async def _ServerReceiveLoop(self):
         while True:
@@ -95,7 +93,18 @@ class ChatroomRouter:
                 self._logger.Error(f"Unknown message type: {message_type}")
                 pass
 
-
+    def _CleanUpClient(self,client:Endpoint):
+        # clear subscriptions
+        for topic in self._topics.values():
+            if client in topic.subscribers:
+                topic.subscribers.remove(client)
+        for service_name,service in self._services.copy().items():
+            if client == service.provider:
+                self._logger.Info(f"Service {service_name} unregistered")
+                del self._services[service_name]
+            else:
+                print(f"Service provider not client {service} {client}")
+        del self._endpoints[client.id]
     '''
     ================================
     Internal API functions 
@@ -110,7 +119,7 @@ class ChatroomRouter:
         response = await self._MakeRequest(service_name=service_name,**args)
 
         # forward the response back to the client
-        await sender.Send("response",response=response,request_id=request_id)
+        await self._SendToEndpoint(sender,"response",response=response,request_id=request_id)
 
     async def handle_response(self,sender,response,request_id):
         '''
@@ -140,7 +149,7 @@ class ChatroomRouter:
             if type != topic.GetTypeName():
                 self._logger.Error(f"Topic {topic_name} already exists with a different type")
                 return
-        await sender.Send("update",changes=[{'topic_name':topic_name,'change':SetChange(topic.GetValue()).Serialize()}])
+        await self._SendToEndpoint(sender,"update",changes=[{'topic_name':topic_name,'change':SetChange(topic.GetValue()).Serialize()}])
 
     async def handle_client_update(self,sender,changes):
         
@@ -182,7 +191,7 @@ class ChatroomRouter:
         The server rejects the update. The client should handle this message.
         '''
         client = self._endpoints[client_id]
-        await client.Send("reject_update",topic_name=topic_name,change=change,reason=reason)
+        await self._SendToEndpoint(client,"reject_update",topic_name=topic_name,change=change,reason=reason)
 
     async def handle_update(self,sender,changes):
         '''
@@ -197,7 +206,7 @@ class ChatroomRouter:
             for client in topic.subscribers:
                 if client == self._server:
                     continue
-                await client.Send("update",changes = [item]) #TODO: optimize this
+                await self._SendToEndpoint(client,"update",changes = [item]) #TODO: optimize this
 
     '''
     ================================
@@ -214,10 +223,19 @@ class ChatroomRouter:
             return
         provider = self._services[service_name].provider
         request_id = str(uuid.uuid4())
-        await provider.Send("request",service_name=service_name,args=args,request_id=request_id)
+        await self._SendToEndpoint(provider,"request",service_name=service_name,args=args,request_id=request_id)
         response = await self._evnt.Wait(f'response_waiter{request_id}')
         return response
-
+    
+    async def _SendToEndpoint(self,endpoint,message_type,**args):
+        '''
+        Send a message to an endpoint
+        '''
+        try:
+            await endpoint.Send(message_type,**args)
+        except ws_exceptions.ConnectionClosed as e:
+            self._logger.Warning(f"Connection to {endpoint} closed")
+            self._CleanUpClient(endpoint)
     '''
     ================================
     Public functions
