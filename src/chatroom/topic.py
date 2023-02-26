@@ -79,9 +79,6 @@ class Topic(metaclass = abc.ABCMeta):
     Public methods
     '''
 
-    def SetChildrenList(self,children_list:UListTopic):
-        self._children_list = children_list
-
     def ValidateChangeAndGetResult(self,change:Change):
         old_value = self._value
         new_value = change.Apply(copy.deepcopy(self._value))

@@ -209,6 +209,9 @@ class ChatroomRouter:
         '''
         Send a request to a service provider and wait for the response
         '''
+        if service_name not in self._services:
+            self._logger.Warning(f"Service {service_name} not registered")
+            return
         provider = self._services[service_name].provider
         request_id = str(uuid.uuid4())
         await provider.Send("request",service_name=service_name,args=args,request_id=request_id)
@@ -220,7 +223,7 @@ class ChatroomRouter:
     Public functions
     ================================
     '''
-    def Start(self):
+    def Start(self,started_event = None):
         '''
         Bloking function that starts the server
         '''
@@ -229,6 +232,8 @@ class ChatroomRouter:
         start_router = websockets.serve(self._HandleClient, "localhost", self._port) # type: ignore
         start = asyncio.gather(start_router,self._ServerReceiveLoop())
         self._logger.Info("Chatroom server started")
+        if started_event is not None:
+            started_event.set()
         asyncio.get_event_loop().run_until_complete(start)
         asyncio.get_event_loop().run_forever()
 
@@ -236,9 +241,11 @@ class ChatroomRouter:
         '''
         Starts the server in a new uwu thread
         '''
-        self._thread = threading.Thread(target=self.Start)
+        started = threading.Event()
+        self._thread = threading.Thread(target=self.Start,kwargs={'started_event':started})
         self._thread.daemon = True
         self._thread.start()
+        started.wait()
 
     def Stop(self):
         '''

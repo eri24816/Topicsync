@@ -217,13 +217,7 @@ class ChatroomClient:
         '''
         asyncio.run(self._ws.close())
         self.thread.join()
-    
-    def DeleteTopic(self,topic_name):
-        '''
-        Delete a topic
-        '''
-        self._SendToRouter("delete_topic",topic_name=topic_name)
-
+        
     def MakeRequest(self,service_name:str,args:Dict,on_response:Callable):
         '''
         Request a service from another client. Does not wait for the response.
