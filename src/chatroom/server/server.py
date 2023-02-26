@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, List, TypeVar, Type
+from typing import Callable, Dict, List, TypeVar, Type
 
 from chatroom.router.router import ChatroomRouter
 from chatroom.router.endpoint import PythonEndpoint
@@ -18,6 +18,7 @@ class ChatroomServer:
         self._endpoint = PythonEndpoint(0,self)
         self._router = ChatroomRouter(self._endpoint,port=port)
         self._topics : WeakKeyDict[str,Topic] = WeakKeyDict(on_removed=self._OnTopicGarbageCollected)
+        self._services : Dict[str,Callable] = {}
         self._evnts : Dict[str,threading.Event] = {}
     
     '''
@@ -72,10 +73,24 @@ class ChatroomServer:
         except InvalidChangeException as e:
             self._logger.Error(f"Invalid change: {e} when subscribing to topic {topic_name}. This happens when some clients have accessed the topic earlier than the server. Avoid that.")
             return
+        
+    def _handle_request(self,service_name,args,request_id):
+        '''
+        Handle a request from a client
+        '''
+        response = self._services[service_name](**args)
+        self._endpoint.SendToRouter("response",response = response,request_id = request_id)
 
     '''
     Public functions
     '''
+    def RegisterService(self,service_name:str,service:Callable):
+        '''
+        Register a service
+        '''
+        self._services[service_name] = service
+        self._endpoint.SendToRouter("register_service",service_name=service_name)
+                                    
     T = TypeVar('T',bound=Topic)
     def RegisterTopic(self,topic_name,type:Type[T],value=None)->T:
         if topic_name in self._topics:
