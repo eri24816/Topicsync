@@ -11,7 +11,7 @@ from chatroom.command import ChangeCommand
 if TYPE_CHECKING:
     from .client.client import ChatroomClient
     from .command import CommandManager
-from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, SetChangeTypes, default_topic_value
+from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, SetChangeTypes, default_topic_value, typeValidator
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -83,11 +83,16 @@ class Topic(metaclass = abc.ABCMeta):
 
     def ValidateChangeAndGetResult(self,change:Change):
         old_value = self._value
-        new_value = change.Apply(copy.deepcopy(self._value))
+        try:
+            new_value = change.Apply(copy.deepcopy(self._value))
+        except InvalidChangeException as e:
+            e.topic = self
+            raise e
 
         for validator in self._validators:
+            print(validator.__name__)
             if not validator(old_value,new_value,change):
-                raise InvalidChangeException(f'Change {change.Serialize()} is not valid for topic {self._name}. Old value: {old_value}, invalid new value: {new_value}')
+                raise InvalidChangeException(self,change,f'Change {change.Serialize()} is not valid for topic {self._name}. Old value: {json.dumps(old_value)}, invalid new value: {json.dumps(new_value)}')
         
         return new_value
 
@@ -127,6 +132,7 @@ class StringTopic(Topic):
     '''
     def __init__(self,name,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
         super().__init__(name,get_topic_by_name,command_manager)
+        self.AddValidator(typeValidator(str))
         self.on_set = Action()
     
     def Set(self, value):
@@ -146,6 +152,7 @@ class SetTopic(Topic):
     
     def __init__(self,name,get_topic_by_name=None,command_manager:Optional[CommandManager]=None):
         super().__init__(name,get_topic_by_name,command_manager)
+        self.AddValidator(typeValidator(list))
         self.on_set = Action()
         self.on_append = Action()
         self.on_remove = Action()

@@ -172,8 +172,11 @@ class ChatroomRouter:
         if len(forward_list) > 0:
             await self._server.Send("client_update",client_id=sender.id,changes = forward_list)
         
-        if len(reflect_list) > 0:
-            await self.handle_update(None,reflect_list)
+        try:
+            if len(reflect_list) > 0:
+                await self.handle_update(None,reflect_list)
+        except InvalidChangeException as e:
+            await self._SendToEndpoint(sender,"reject_update",topic_name=e.topic.GetName(),change=e.change.Serialize(),reason=e.reason)
         
 
     async def handle_unsubscribe(self,sender,topic_name):

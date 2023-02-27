@@ -56,7 +56,7 @@ class ChatroomServer:
                 
         except InvalidChangeException as e:
             self._command_manager.Reset()
-            self._endpoint.SendToRouter("reject_update",client_id=client_id,topic_name=changes[0]['topic_name'],change=changes[0]['change'],reason=str(e))
+            self._endpoint.SendToRouter("reject_update",client_id=client_id,topic_name=e.topic.GetName(),change=e.change.Serialize(),reason=str(e))
             return
         
     def _handle_update(self,changes):

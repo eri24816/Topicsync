@@ -1,7 +1,10 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
 import copy
 
 from chatroom import logger
+if TYPE_CHECKING:
+    from chatroom.topic import Topic
 '''
 Change is a class that represents a change to a topic. It can be serialized and be passed between clients and the server.
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).
@@ -10,7 +13,11 @@ The server then sends the change to all the subscribers of the topic.
 import uuid
 
 class InvalidChangeException(Exception):
-    pass
+    def __init__(self,topic:Optional[Topic],change:Change,reason:str):
+        super().__init__(f'Invalid change {change.Serialize()} for topic {topic.GetName() if topic is not None else "unknown"}: {reason}')
+        self.topic = topic
+        self.change = change
+        self.reason = reason
 
 default_topic_value = {
     'string':'',
@@ -26,6 +33,11 @@ def remove_entry(dictionary,key):
     if key in dictionary:
         del dictionary[key]
     return dictionary
+
+def typeValidator(t):
+    def f(old_value,new_value,change):
+        return isinstance(new_value,t)
+    return f
 
 class Change: 
     @staticmethod
@@ -89,10 +101,10 @@ class SetChangeTypes:
             self.item = item
         def Apply(self, old_value):
             if self.item not in old_value:
-                raise InvalidChangeException(f'Cannot remove {self.item} from {old_value}')
+                raise InvalidChangeException(None,self,f'Cannot remove {self.item} from {old_value}')
             new_value = old_value[:]
             new_value.remove(self.item)
-            return  new_value
+            return new_value
         def Serialize(self):
             return {"type":"remove","item":self.item,"id":self.id}
         def Inverse(self)->Change:
