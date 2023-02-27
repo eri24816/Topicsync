@@ -141,6 +141,7 @@ class ChatroomRouter:
         if topic_name not in self._topics:
             topic = self._topics[topic_name] = TopicFactory(topic_name,type)
             topic.subscribers.append(sender)
+            await self._server.Send('topic_created',topic_name=topic_name,type=type)
         else:
             topic = self._topics[topic_name]
             topic.subscribers.append(sender)
@@ -183,6 +184,7 @@ class ChatroomRouter:
         topic.subscribers.remove(sender)
         if len(topic.subscribers) == 0:
             del self._topics[topic_name]
+            await self._server.Send('topic_deleted',topic_name=topic_name,type=topic.GetTypeName())
 
     async def handle_reject_update(self,sender,client_id,topic_name,change,reason):
         '''

@@ -77,8 +77,7 @@ class SetChangeTypes:
             super().__init__(id)
             self.item = item
         def Apply(self, old_value):
-            old_value.append(self.item)
-            return old_value
+            return old_value + [self.item]
         def Serialize(self):
             return {"type":"append","item":self.item,"id":self.id}
         def Inverse(self)->Change:
@@ -91,8 +90,9 @@ class SetChangeTypes:
         def Apply(self, old_value):
             if self.item not in old_value:
                 raise InvalidChangeException(f'Cannot remove {self.item} from {old_value}')
-            old_value.remove(self.item)
-            return old_value
+            new_value = old_value[:]
+            new_value.remove(self.item)
+            return  new_value
         def Serialize(self):
             return {"type":"remove","item":self.item,"id":self.id}
         def Inverse(self)->Change:

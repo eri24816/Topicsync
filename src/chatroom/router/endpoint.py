@@ -18,7 +18,7 @@ class WSEndpoint(Endpoint):
 
     async def _SendRaw(self,message):
         await self._ws.send(message)
-        self._logger.Debug(f"< {message}")
+        self._logger.Debug(f"<{self.id} {message}")
 
     async def Send(self,*args,**kwargs):
         await self._SendRaw(MakeMessage(*args,**kwargs))

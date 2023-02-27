@@ -2,6 +2,8 @@ from __future__ import annotations
 from collections import deque
 import contextlib
 import copy
+import json
+import time
 from typing import Any, Deque, Dict, Tuple, Type
 from typing import Callable, List, TYPE_CHECKING, Optional
 from itertools import count
@@ -163,16 +165,17 @@ class SetTopic(Topic):
     def __len__(self):
         return len(self._value)
 
-    def _NotifyListeners(self,change:Change, old_value, new_value):
+    def _NotifyListeners(self,change:Change, old_value:list, new_value:list):
         if isinstance(change,SetChangeTypes.SetChange):
             self.on_set(new_value)
-            
-            removed_items = set(old_value) - set(new_value)
-            added_items = set(new_value) - set(old_value)
+            old_value_set = set(map(json.dumps,old_value))
+            new_value_set = set(map(json.dumps,new_value))
+            removed_items = old_value_set - new_value_set
+            added_items = new_value_set - old_value_set
             for item in removed_items:
-                self.on_remove(item)
+                self.on_remove(json.loads(item))
             for item in added_items:
-                self.on_append(item)
+                self.on_append(json.loads(item))
 
         elif isinstance(change,SetChangeTypes.AppendChange):
             self.on_set(new_value)

@@ -1,3 +1,4 @@
+import json
 import unittest
 from chatroom import ChatroomServer, ChatroomClient
 import time
@@ -148,29 +149,29 @@ class TestTopicChanges(unittest.TestCase):
         set2.on_remove += lambda x: app2.b.remove(x)
 
         def assert_equal(answer):
-            answer = sorted(answer)
-            self.assertEqual(sorted(app1.a), answer)
-            self.assertEqual(sorted(app2.a), answer)
-            self.assertEqual(sorted(app1.b), answer)
-            self.assertEqual(sorted(app2.b), answer)
+            answer = sorted(map(json.dumps,answer))
+            self.assertEqual(sorted(map(json.dumps,app1.a)), answer)
+            self.assertEqual(sorted(map(json.dumps,app2.a)), answer)
+            self.assertEqual(sorted(map(json.dumps,app1.b)), answer)
+            self.assertEqual(sorted(map(json.dumps,app2.b)), answer)
 
         set1.Set([1,2,3])
         time.sleep(0.1)
         assert_equal([1,2,3])
 
-        set1.Append(4)
+        set1.Append({'a':1,'b':[{'c':100.1}]})
         set2.Append(5)
         time.sleep(0.1)
-        assert_equal([1,2,3,4,5])
+        assert_equal([1,2,3,{'a':1,'b':[{'c':100.1}]},5])
 
         set1.Remove(1)
         set2.Remove(2)
         set2.Append(6)
         set1.Remove(3)
         time.sleep(0.1)
-        assert_equal([4,5,6])
+        assert_equal([{'a':1,'b':[{'c':100.1}]},5,6])
 
-        set2.Set([4,5,6])
+        set2.Set([5,6,7])
         time.sleep(0.1)
-        assert_equal([4,5,6])
+        assert_equal([5,6,7])
 

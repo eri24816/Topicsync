@@ -20,6 +20,9 @@ class ChatroomServer:
         self._topics : WeakKeyDict[str,Topic] = WeakKeyDict(on_removed=self._OnTopicGarbageCollected)
         self._services : Dict[str,Callable] = {}
         self._evnts : Dict[str,threading.Event] = {}
+
+        #temp_ref_keeper = self._topics['_chatroom/topic_list'] = SetTopic('_chatroom/topic_list',lambda name: self._topics[name],self._command_manager)
+        self._topic_list = self.RegisterTopic('_chatroom/topic_list',SetTopic)
     
     '''
     Callbacks
@@ -74,6 +77,12 @@ class ChatroomServer:
             self._logger.Error(f"Invalid change: {e} when subscribing to topic {topic_name}. This happens when some clients have accessed the topic earlier than the server. Avoid that.")
             return
         
+    def _handle_topic_created(self,topic_name,type):
+        self._topic_list.Append({'topic_name':topic_name,'type':type})
+
+    def _handle_topic_deleted(self,topic_name,type):
+        self._topic_list.Remove({'topic_name':topic_name,'type':type})
+
     def _handle_request(self,service_name,args,request_id):
         '''
         Handle a request from a client
@@ -92,20 +101,21 @@ class ChatroomServer:
         self._endpoint.SendToRouter("register_service",service_name=service_name)
                                     
     T = TypeVar('T',bound=Topic)
-    def RegisterTopic(self,topic_name,type:Type[T],value=None)->T:
+    def RegisterTopic(self,topic_name,type:Type[T])->T:
         if topic_name in self._topics:
             topic = self._topics[topic_name]
             assert isinstance(topic,type)
             return topic
         else:
             topic = self._topics[topic_name] = type(topic_name,lambda name: self._topics[name],self._command_manager)
+            if topic_name == '_chatroom/topic_list':
+                self._topic_list = topic
             # send to router
             # Server doesn't really subscribe to topics. To "subscribe" means to tell the router that the server is interested in the topic,
             # so do not garbage collect it.
             self._endpoint.SendToRouter("subscribe",topic_name=topic_name,type=type.GetTypeName()) 
             evnt = self._evnts[topic_name] = threading.Event()
-            print("Waiting for topic to be updated")
-            evnt.wait() # wait for the topic to be updated to the latest state
+            evnt.wait(2) # wait for the topic to be updated to the latest state
             self._logger.Debug(f"Added topic {topic_name}")
             return topic
     '''
