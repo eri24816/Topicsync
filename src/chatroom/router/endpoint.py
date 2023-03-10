@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 from chatroom.utils import MakeMessage
 
 class Endpoint:
@@ -38,7 +39,7 @@ class PythonEndpoint(Endpoint):
         method = getattr(self._target,'_handle_'+message_type)
         method(*args,**kwargs)
 
-    def SendToRouter(self,*args,**kwargs):
+    def SendToRouter(self,*args:Any,**kwargs:Any):
         assert isinstance(self._event_loop,asyncio.AbstractEventLoop)
         assert isinstance(self.queue_to_router,asyncio.Queue)
         self._event_loop.call_soon_threadsafe(self.queue_to_router.put_nowait,MakeMessage(*args,**kwargs))

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 import copy
 
 from chatroom import logger
@@ -41,11 +41,11 @@ def typeValidator(t):
 
 class Change: 
     @staticmethod
-    def Deserialize(topic_type, change_dict)->Change:
+    def Deserialize(change_dict:dict[str,Any])->Change:
         change_type, change_dict = change_dict['type'], remove_entry(change_dict,'type')
-        return TypeNameToChangeTypes[topic_type].types[change_type](**change_dict)
+        return TypeNameToChangeTypes[change_dict['topic_type']].types[change_type](**change_dict)
     
-    def __init__(self,id=None):
+    def __init__(self,id:Optional[str]=None):
         if id is None:
             self.id = str(uuid.uuid4())
         else:
@@ -70,20 +70,20 @@ class SetChange(Change):
     def Apply(self, old_value):
         self.old_value = old_value
         return copy.deepcopy(self.value)
-    def Serialize(self):
-        return {"type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
     def Inverse(self)->Change:
         return self.__class__(copy.deepcopy(self.old_value),copy.deepcopy(self.value))
 
 class StringChangeTypes:
     class SetChange(SetChange):
-        pass
-    
+        def Serialize(self):
+            return {"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+        
     types = {'set':SetChange}
 
 class SetChangeTypes:
     class SetChange(SetChange):
-        pass
+        def Serialize(self):
+                return {"topic_type":"set","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
     class AppendChange(Change):
         def __init__(self, item,id=None):
             super().__init__(id)
@@ -91,7 +91,7 @@ class SetChangeTypes:
         def Apply(self, old_value):
             return old_value + [self.item]
         def Serialize(self):
-            return {"type":"append","item":self.item,"id":self.id}
+            return {"topic_type":"set","type":"append","item":self.item,"id":self.id}
         def Inverse(self)->Change:
             return SetChangeTypes.RemoveChange(self.item)
         
@@ -106,7 +106,7 @@ class SetChangeTypes:
             new_value.remove(self.item)
             return new_value
         def Serialize(self):
-            return {"type":"remove","item":self.item,"id":self.id}
+            return {"topic_type":"set","type":"remove","item":self.item,"id":self.id}
         def Inverse(self)->Change:
             return SetChangeTypes.AppendChange(self.item)
     
