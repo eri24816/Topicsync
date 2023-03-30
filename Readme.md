@@ -29,12 +29,7 @@ Using a service, a client can call a function in another client and get the retu
 
 Special services are those with their names begin with `_chatroom/`.
 
-- `_chatroom/validate_change/<topic_name>` 
-    
-    The server calls this service to validate a topic change. Clients can register this service to become a autority, who will be asked by the server whether the changes are valid everytime a client want to make a change to the topic.
-
-
-## Internal Communication API
+## Internal Communication API (Outdated, need to be updated later)
 
 The communication between a ChatRoom server and a client is done via a WebSocket connection. Every message has the following format:
 

@@ -80,3 +80,10 @@ class WeakKeyDict(weakref.WeakValueDictionary[_KT, _VT]):
     
 def camel_to_snake(name):
     return ''.join(['_'+c.lower() if c.isupper() else c for c in name]).lstrip('_')
+
+T = typing.TypeVar('T')
+def astype(value:Any,type_:type[T])->T:
+    if isinstance(value,type_):
+        return value
+    else:
+        raise TypeError(f"{type(value)} is not subtype of {type_}")
