@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from contextlib import contextmanager
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 from chatroom.command import ChangeCommand
 from chatroom.topic_change import InvalidChangeException
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class StateMachine:
         self._changes_made : List[ChangeCommand] = []
         self._on_changes_made = on_changes_made
         self._on_transition_done = on_transition_done
-        self._error_has_occured_in_transition = False
+        self._first_error_during_transition: Optional[Exception] = None
         self._recursion_enabled = True
         self._apply_change_call_stack = []
     
@@ -65,7 +65,6 @@ class StateMachine:
     @contextmanager
     def Record(self,actionSource:int = 0):
         self._isRecording = True
-        self._error_has_occured_in_transition = False
         self._changes_made = []
         try:
             yield
@@ -76,10 +75,10 @@ class StateMachine:
             raise
         else:
             self._isRecording = False
-            if self._error_has_occured_in_transition:
+            if self._first_error_during_transition:
                 print("An error has occured in the transition but was catched by the user code. Cleaning up the failed transition.")
                 self._CleanupFailedTransition()
-                raise Exception("An error has occured in the transition but was catched by the user code.")
+                raise self._first_error_during_transition
             else:
                 newTransition = Transition(self._current_transition,actionSource)
                 self._on_transition_done(newTransition)
@@ -87,6 +86,7 @@ class StateMachine:
             self._isRecording = False
             self._NotifyChanges()
             self._current_transition = []
+            self._first_error_during_transition = None
 
     def _CleanupFailedTransition(self):
         try:
@@ -128,9 +128,10 @@ class StateMachine:
 
             try:
                 old_value,new_value = topic.ApplyChange(change,notify_listeners=False) # If a exception is raised here, the change is not applied and the command is not added to the _current_transition
-            except Exception:
-                self._error_has_occured_in_transition = True
-                raise
+            except Exception as e:
+                if not self._first_error_during_transition:
+                    self._first_error_during_transition = e
+                return
 
             self._current_transition.append(command)
             self._changes_made.append(command)
