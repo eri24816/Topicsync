@@ -86,7 +86,11 @@ class Topic(metaclass = abc.ABCMeta):
         new_value = self._ValidateChangeAndGetResult(change)
         self._value = new_value
         if notify_listeners:
-            self.NotifyListeners(change,old_value=old_value,new_value=self._value)
+            try:
+                self.NotifyListeners(change,old_value=old_value,new_value=self._value)
+            except:
+                self._value = old_value
+                raise
         return old_value,new_value
 
     @abc.abstractmethod
