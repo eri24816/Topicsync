@@ -29,7 +29,6 @@ class StateMachine:
         self._changes_made : List[ChangeCommand] = []
         self._on_changes_made = on_changes_made
         self._on_transition_done = on_transition_done
-        self._error_has_occured_in_transition = False
         self._recursion_enabled = True
         self._apply_change_call_stack = []
     
@@ -76,13 +75,8 @@ class StateMachine:
             raise
         else:
             self._isRecording = False
-            if self._error_has_occured_in_transition:
-                print("An error has occured in the transition but was catched by the user code. Cleaning up the failed transition.")
-                self._CleanupFailedTransition()
-                raise Exception("An error has occured in the transition but was catched by the user code.")
-            else:
-                newTransition = Transition(self._current_transition,actionSource)
-                self._on_transition_done(newTransition)
+            newTransition = Transition(self._current_transition,actionSource)
+            self._on_transition_done(newTransition)
         finally:
             self._isRecording = False
             self._NotifyChanges()
@@ -126,16 +120,23 @@ class StateMachine:
         with self._TrackApplyChange(command.topic_name):
             topic,change = self.GetTopic(command.topic_name),command.change
 
-            try:
-                old_value,new_value = topic.ApplyChange(change,notify_listeners=False) # If a exception is raised here, the change is not applied and the command is not added to the _current_transition
-            except Exception:
-                self._error_has_occured_in_transition = True
-                raise
-
             self._current_transition.append(command)
             self._changes_made.append(command)
+            try:
+                topic.ApplyChange(change)
+            except:
+                # undo the whole subtree
+                while self._current_transition[-1] != command:
+                    topic = self._current_transition[-1].topic_name
+                    change = self._current_transition[-1].change
+                    self.GetTopic(topic).ApplyChange(change.Inverse(), notify_listeners=False)
+                    
+                    del self._current_transition[-1]
+                    del self._changes_made[-1]
 
-            topic.NotifyListeners(command.change,old_value,new_value) # If a exception is raised here,the command is added to the _current_transition. The cleanup process will undo the change.
+                del self._current_transition[-1]
+                del self._changes_made[-1]
+                raise
 
     def Undo(self, transition: Transition):
         raise NotImplementedError
