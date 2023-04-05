@@ -167,3 +167,30 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(b.GetValue(), 'hello world')
         self.assertEqual(c.GetValue(), '')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a', 'b'])
+
+    def test_fail_subtrees(self):
+        changes_list = []
+        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
+        machine.AddTopic(a:=StringTopic('a',machine))
+        machine.AddTopic(b:=StringTopic('b',machine))
+        machine.AddTopic(c:=StringTopic('c',machine))
+        machine.AddTopic(d:=StringTopic('d',machine))
+        machine.AddTopic(e:=StringTopic('e',machine))
+
+        a.on_set += lambda value: d.Set('newd')
+        a.on_set += lambda value: b.Set('newb')
+        b.on_set += lambda value: c.Set('newc')
+        c.AddValidator(lambda old,new,change: False)
+        d.on_set += lambda value: e.Set('newe')
+        with machine.Record():
+            try:
+                a.Set('hello')
+            except:
+                pass
+        
+        self.assertEqual(a.GetValue(), '')
+        self.assertEqual(b.GetValue(), '')
+        self.assertEqual(c.GetValue(), '')
+        self.assertEqual(d.GetValue(), '')
+        self.assertEqual(e.GetValue(), '')
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])

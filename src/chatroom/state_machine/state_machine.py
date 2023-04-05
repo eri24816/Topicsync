@@ -125,7 +125,15 @@ class StateMachine:
             try:
                 topic.ApplyChange(change)
             except:
-                # remove the appended command
+                # undo the whole subtree
+                while self._current_transition[-1] != command:
+                    topic = self._current_transition[-1].topic_name
+                    change = self._current_transition[-1].change
+                    self.GetTopic(topic).ApplyChange(change.Inverse(), notify_listeners=False)
+                    
+                    del self._current_transition[-1]
+                    del self._changes_made[-1]
+
                 del self._current_transition[-1]
                 del self._changes_made[-1]
                 raise
