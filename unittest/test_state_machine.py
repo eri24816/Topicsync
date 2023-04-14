@@ -8,7 +8,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_simple_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         with machine.Record():
@@ -22,7 +22,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_chain(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -38,7 +38,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -64,7 +64,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_and_catched_tranition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -92,7 +92,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_prevent_recursive_change(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -109,7 +109,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_set_without_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         b.AddValidator(lambda old,new,change: False)
@@ -124,7 +124,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_set_with_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -144,7 +144,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_try_except_in_on_set(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)
@@ -169,7 +169,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_subtrees(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
         a=machine.AddTopic('a',StringTopic)
         b=machine.AddTopic('b',StringTopic)
         c=machine.AddTopic('c',StringTopic)

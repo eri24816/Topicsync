@@ -55,27 +55,24 @@ class ChatroomServer:
         Called when the state machine finishes a transition
         """
 
-    def _OnChangesMade(self, changes:List[Change]):
-        self._client_manager.SendUpdate(changes)
+    def _OnChangesMade(self, changes:List[Change],actionID:str):
+        self._client_manager.SendUpdate(changes,actionID)
 
     """
     Interface for router
     """
 
-    def _HandleAction(self, sender:Client, commands: list[dict[str, Any]]):
+    def _HandleAction(self, sender:Client, commands: list[dict[str, Any]],action_id:str):
         try:
-            with self._state_machine.Record(actionSource=sender.id):
+            with self._state_machine.Record(actionSource=sender.id,actionID=action_id):
                 for command_dict in commands:
-                    self._ExecuteClientCommand(command_dict)
+                    command = Change.Deserialize(command_dict)
+                    self._state_machine.ApplyChange(command)
 
         except Exception as e:
-            sender.Send("reject",reason=str(e))
-            if not isinstance(e,InvalidChangeException):
-                raise
-        
-    def _ExecuteClientCommand(self, command_dict: dict[str, Any]):
-        command = Change.Deserialize(command_dict)
-        self._state_machine.ApplyChange(command)
+            sender.Send("reject",reason=repr(e))
+            # if not isinstance(e,InvalidChangeException):
+            #     raise
 
     def _HandleRequest(self, sender:Client, service_name, args, request_id):
         """

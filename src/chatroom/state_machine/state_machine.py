@@ -13,7 +13,7 @@ class Transition:
         self._actionSource = actionSource
 
 class StateMachine:
-    def __init__(self, on_changes_made:Callable[[List[Change]], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
+    def __init__(self, on_changes_made:Callable[[List[Change],str], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
         self._state : dict[str,Topic] = {}
         self._current_transition : List[Change] = []
         self._isRecording = False
@@ -52,7 +52,7 @@ class StateMachine:
             self._recursion_enabled = True
 
     @contextmanager
-    def Record(self,actionSource:int = 0):
+    def Record(self,actionSource:int = 0,actionID:str = ''):
         self._isRecording = True
         self._error_has_occured_in_transition = False
         self._changes_made = []
@@ -69,7 +69,8 @@ class StateMachine:
             self._on_transition_done(newTransition)
         finally:
             self._isRecording = False
-            self._NotifyChanges()
+            self._on_changes_made(self._changes_made,actionID)
+            self._changes_made = []
             self._current_transition = []
 
     def _CleanupFailedTransition(self):
@@ -83,10 +84,6 @@ class StateMachine:
         except Exception as e:
             print("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
             raise
-
-    def _NotifyChanges(self):
-        self._on_changes_made(self._changes_made)
-        self._changes_made = []
 
     @contextmanager
     def _TrackApplyChange(self,topic_name):

@@ -86,7 +86,7 @@ class ClientManager:
             self._logger.Error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
             self._CleanUpClient(client)
 
-    def SendUpdate(self,changes:List[Change]):
+    def SendUpdate(self,changes:List[Change],actionID:str):
         '''
         Broadcast a list of changes to all clients subscribed to the topics in the changes.
         '''
@@ -97,7 +97,7 @@ class ClientManager:
 
         for client_id in messages_for_client:
             client = self._clients[client_id]
-            self.Send(client,"update",changes=messages_for_client[client_id])
+            self.Send(client,"update",changes=messages_for_client[client_id],action_id=actionID)
     
     def RegisterMessageHandler(self,message_type:str,handler:Callable[...,None|Awaitable[None]]):
         self._message_handlers[message_type] = handler
@@ -110,7 +110,7 @@ class ClientManager:
         self._subscriptions[topic_name].add(sender.id)
         self._logger.Info(f"Client {sender.id} subscribed to {topic_name}")
         value = self._GetTopicValue(topic_name)
-        self.Send(sender,"update",changes=[SetChange(topic_name,value).Serialize()])
+        self.Send(sender,"update",changes=[SetChange(topic_name,value).Serialize()],action_id="")
 
     def _HandleUnsubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].discard(sender.id)
