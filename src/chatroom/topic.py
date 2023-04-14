@@ -4,12 +4,14 @@ import contextlib
 import copy
 import json
 import time
-from typing import Any, Tuple, Type
+from typing import TYPE_CHECKING, Any, Tuple, Type
 from typing import Callable, List, Optional
-from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, SetChangeTypes, default_topic_value, typeValidator
 from chatroom.utils import Action, camel_to_snake
 import abc
+
+if TYPE_CHECKING:
+    from chatroom.state_machine.state_machine import StateMachine
 
 def TopicFactory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
     if type == 'string':
@@ -42,7 +44,6 @@ class Topic(metaclass = abc.ABCMeta):
             raise e
     
         for validator in self._validators:
-            print(validator.__name__)
             if not validator(old_value,new_value,change):
                 raise InvalidChangeException(self,change,f'Change {change.Serialize()} is not valid for topic {self._name}. Old value: {json.dumps(old_value)}, invalid new value: {json.dumps(new_value)}')
         
@@ -68,9 +69,7 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Call this when the user or the app wants to change the value of the topic. The change is then be executed by the state machine.
         '''
-        assert self._state_machine is not None
-        command = self._state_machine.CreateChangeCommand(self.GetName(),change)
-        self._state_machine.ApplyChange(command)        
+        self._state_machine.ApplyChange(change)        
 
     '''
     Called by the state machine
@@ -112,7 +111,7 @@ class StringTopic(Topic):
         self.on_set = Action()
     
     def Set(self, value):
-        change = StringChangeTypes.SetChange(value)
+        change = StringChangeTypes.SetChange(self._name,value)
         self.ApplyChangeExternal(change)
 
     def NotifyListeners(self,change:Change, old_value, new_value):
@@ -134,15 +133,15 @@ class SetTopic(Topic):
         self.on_remove = Action()
     
     def Set(self, value):
-        change = SetChangeTypes.SetChange(value)
+        change = SetChangeTypes.SetChange(self._name,value)
         self.ApplyChangeExternal(change)
 
     def Append(self, item):
-        change = SetChangeTypes.AppendChange(item)
+        change = SetChangeTypes.AppendChange(self._name,item)
         self.ApplyChangeExternal(change)
 
     def Remove(self, item):
-        change = SetChangeTypes.RemoveChange(item)
+        change = SetChangeTypes.RemoveChange(self._name,item)
         self.ApplyChangeExternal(change)        
     
     def __len__(self):

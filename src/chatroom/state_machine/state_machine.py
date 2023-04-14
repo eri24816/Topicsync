@@ -1,57 +1,47 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
-from chatroom.command import ChangeCommand
+from chatroom.topic import Topic, TopicFactory
 from chatroom.topic_change import InvalidChangeException
 if TYPE_CHECKING:
-    from chatroom.topic import Topic
     from chatroom.topic_change import Change
 
 class Transition:
-    def __init__(self,commands:List[ChangeCommand],actionSource:int):
-        self._commands = commands
+    def __init__(self,changes:List[Change],actionSource:int):
+        self._changes = changes
         self._actionSource = actionSource
 
-    def Execute(self):
-        for command in self._commands:
-            command.Execute()
-
-    def Undo(self):
-        for command in reversed(self._commands):
-            command.Undo()
-
 class StateMachine:
-    def __init__(self, on_changes_made:Callable[[List[ChangeCommand]], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
+    def __init__(self, on_changes_made:Callable[[List[Change]], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
         self._state : dict[str,Topic] = {}
-        self._current_transition : List[ChangeCommand] = []
+        self._current_transition : List[Change] = []
         self._isRecording = False
-        self._changes_made : List[ChangeCommand] = []
+        self._changes_made : List[Change] = []
         self._on_changes_made = on_changes_made
         self._on_transition_done = on_transition_done
         self._recursion_enabled = True
         self._apply_change_call_stack = []
     
-    def AddTopic(self,topic:Topic):
-        self._state[topic.GetName()] = topic
+    T = TypeVar('T', bound=Topic)
+    def AddTopic(self,name:str,topic_type:type[T])->T:
+        topic = topic_type(name,self)
+        self._state[name] = topic
+        return topic
+    
+    def AddTopic_s(self,name:str,topic_type:str)->Topic:
+        topic = TopicFactory(name,topic_type,self)
+        self._state[name] = topic
+        return topic
+    
+    def RemoveTopic(self,name:str):
+        del self._state[name]
 
     def GetTopic(self,topicName:str)->Topic:
         return self._state[topicName]
     
     def HasTopic(self,topicName:str):
         return topicName in self._state
-    
-    def CreateChangeCommand(self,topic_name:str,change:Change):
-        '''
-        A change command depends on a GetTopic function, which is in the state machine, so we need to create it here
-        '''
-        return ChangeCommand(topic_name,change,self.GetTopic)
-    
-    def DesearializeChangeCommand(self,command_dict:dict[str,Any]):
-        '''
-        Deserializing version of CreateChangeCommand
-        '''
-        return ChangeCommand.Deserialize(command_dict,self.GetTopic)
 
     @contextmanager
     def _DisableRecursion(self):
@@ -85,11 +75,11 @@ class StateMachine:
     def _CleanupFailedTransition(self):
         try:
             with self._DisableRecursion():
-                for command in reversed(self._current_transition):
-                    topic,inv_change = self.GetTopic(command.topic_name),command.change.Inverse()
+                for change in reversed(self._current_transition):
+                    topic,inv_change = self.GetTopic(change.topic_name),change.Inverse()
                     old_value,new_value = topic.ApplyChange(inv_change,notify_listeners=False)
                     topic.NotifyListeners(inv_change,old_value,new_value)
-                    self._changes_made.remove(command)
+                    self._changes_made.remove(change)
         except Exception as e:
             print("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
             raise
@@ -106,31 +96,34 @@ class StateMachine:
         finally:
             self._apply_change_call_stack.pop()
 
-    def ApplyChange(self,command:ChangeCommand):
+    def ApplyChange(self,change:Change):
         #TODO: stateless topic branch
         if not self._recursion_enabled:
             return
         if not self._isRecording:
-            raise Exception("You must change the state in the StateMachine.Record context")
-        
-        # Prevents infinite recursion
-        if command.topic_name in self._apply_change_call_stack:
+            with self.Record():
+                self.ApplyChange(change)
             return
         
-        with self._TrackApplyChange(command.topic_name):
-            topic,change = self.GetTopic(command.topic_name),command.change
+        # Prevents infinite recursion
+        if change.topic_name in self._apply_change_call_stack:
+            return
+        
+        with self._TrackApplyChange(change.topic_name):
+            topic = self.GetTopic(change.topic_name)
 
-            self._current_transition.append(command)
-            self._changes_made.append(command)
+            self._current_transition.append(change)
+            self._changes_made.append(change)
             try:
                 topic.ApplyChange(change)
             except:
                 # undo the whole subtree
-                while self._current_transition[-1] != command:
+                while self._current_transition[-1] != change:
                     topic = self._current_transition[-1].topic_name
-                    change = self._current_transition[-1].change
+                    change = self._current_transition[-1]
                     self.GetTopic(topic).ApplyChange(change.Inverse(), notify_listeners=False)
                     
+                    #! todo: separate _changes_made and _current_transition
                     del self._current_transition[-1]
                     del self._changes_made[-1]
 

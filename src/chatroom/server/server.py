@@ -8,8 +8,7 @@ from chatroom.state_machine.state_machine import StateMachine, Transition
 from chatroom.topic import Topic, SetTopic
 from chatroom.logger import Logger, DEBUG
 from chatroom.utils import astype
-from chatroom.command import ChangeCommand
-from chatroom.topic_change import InvalidChangeException
+from chatroom.topic_change import Change, InvalidChangeException
 
 
 class ChatroomServer:
@@ -18,9 +17,22 @@ class ChatroomServer:
         self.host = host
         self._command_handler = command_handler
         self._logger = Logger(DEBUG, "Server")
-        self._client_manager = ClientManager()
+        def GetValue(topic_name):
+            topic = self._state_machine.GetTopic(topic_name)
+            return topic.GetValue()
+        self._client_manager = ClientManager(GetValue)
         self._services: Dict[str, Callable[..., Any]] = {}
         self._state_machine = StateMachine(self._OnChangesMade,self._OnTransitionDone)
+
+        self.topicSet = self._state_machine.AddTopic("_chatroom/topics",SetTopic)
+        self.topicSet.Append({"topic_name":"_chatroom/topics","topic_type":"set"})
+        def onTopicSetAppend(item):
+            self._state_machine.AddTopic_s(item["topic_name"],item["topic_type"])
+        def onTopicSetRemove(item):
+            self._state_machine.RemoveTopic(item["topic_name"])
+        self.topicSet.on_append += onTopicSetAppend
+        self.topicSet.on_remove += onTopicSetRemove
+        print(self.topicSet.GetValue())
 
     async def Serve(self):
         '''
@@ -43,34 +55,27 @@ class ChatroomServer:
         Called when the state machine finishes a transition
         """
 
-    def _OnChangesMade(self, changes:List[ChangeCommand]):
+    def _OnChangesMade(self, changes:List[Change]):
         self._client_manager.SendUpdate(changes)
 
     """
     Interface for router
     """
 
-    def _HandleAction(self, sender:Client, action_id: str, commands: list[dict[str, Any]]):
+    def _HandleAction(self, sender:Client, commands: list[dict[str, Any]]):
         try:
             with self._state_machine.Record(actionSource=sender.id):
                 for command_dict in commands:
                     self._ExecuteClientCommand(command_dict)
 
         except Exception as e:
-            sender.Send("reject_action",action_id=action_id,reason=str(e))
+            sender.Send("reject",reason=str(e))
             if not isinstance(e,InvalidChangeException):
                 raise
-        else:
-            sender.Send("accept_action",action_id=action_id)
         
-    def _ExecuteClientCommand(self, command_type_and_dict: dict[str, Any]):
-        command_type, command_dict = command_type_and_dict["type"], command_type_and_dict["command"]
-        if command_type == "change":
-            command = ChangeCommand.Deserialize(command_dict, self._state_machine.GetTopic)
-            self._state_machine.ApplyChange(command)
-        else:
-            # Let the app handle the command
-            self._command_handler(command_dict)
+    def _ExecuteClientCommand(self, command_dict: dict[str, Any]):
+        command = Change.Deserialize(command_dict)
+        self._state_machine.ApplyChange(command)
 
     def _HandleRequest(self, sender:Client, service_name, args, request_id):
         """
@@ -90,7 +95,7 @@ class ChatroomServer:
         self._services[service_name] = service
 
     T = TypeVar("T", bound=Topic)
-    def Topic(self, topic_name, type: type[T]) -> T:
+    def getTopic(self, topic_name, type: type[T]) -> T:
         '''
         Get a topic, or create it if it doesn't exist
         '''
@@ -99,7 +104,11 @@ class ChatroomServer:
             assert isinstance(topic, type)
             return topic
         else:
-            topic =  type(topic_name, self._state_machine)
-            self._state_machine.AddTopic(topic)
-            self._logger.Debug(f"Added topic {topic_name}")
-            return topic
+            raise Exception(f"Topic {topic_name} does not exist")
+        
+    T = TypeVar("T", bound=Topic)
+    def AddTopic(self, topic_name, type: type[T]) -> T:
+        self.topicSet.Append({"topic_name":topic_name,"topic_type":type.GetTypeName()})
+        self._logger.Debug(f"Added topic {topic_name}")
+        return self.getTopic(topic_name,type)
+        

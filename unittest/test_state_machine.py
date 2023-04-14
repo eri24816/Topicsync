@@ -1,6 +1,5 @@
 from contextlib import suppress
 import unittest
-from chatroom.command import ChangeCommand
 from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic import StringTopic
 from chatroom.topic_change import InvalidChangeException
@@ -10,8 +9,8 @@ class StateMachineTransition(unittest.TestCase):
         changes_list = []
         transition_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
         with machine.Record():
             a.Set('hello')
             b.Set('world')
@@ -24,9 +23,9 @@ class StateMachineTransition(unittest.TestCase):
         changes_list = []
         transition_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         a.on_set += lambda value: b.Set('hello '+value)
         b.on_set += lambda value: c.Set(value+'!')
         with machine.Record():
@@ -40,9 +39,9 @@ class StateMachineTransition(unittest.TestCase):
         changes_list = []
         transition_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         a.on_set += lambda value: b.Set('hello '+value)
         b.on_set += lambda value: c.Set(value+'!')
         b.AddValidator(lambda old,new,change: new != 'hello world')
@@ -66,9 +65,9 @@ class StateMachineTransition(unittest.TestCase):
         changes_list = []
         transition_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         a.on_set += lambda value: b.Set('hello '+value)
         b.on_set += lambda value: c.Set(value+'!')
         b.AddValidator(lambda old,new,change: new != 'hello world')
@@ -94,9 +93,9 @@ class StateMachineTransition(unittest.TestCase):
         changes_list = []
         transition_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         a.on_set += lambda value: b.Set('hello '+value)
         b.on_set += lambda value: c.Set(value+'!')
         c.on_set += lambda value: a.Set('NO ' + value)
@@ -111,8 +110,8 @@ class StateMachineTransition(unittest.TestCase):
     def test_fail_set_without_except(self):
         changes_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
         b.AddValidator(lambda old,new,change: False)
         with self.assertRaises(InvalidChangeException):
             with machine.Record():
@@ -126,9 +125,9 @@ class StateMachineTransition(unittest.TestCase):
     def test_fail_set_with_except(self):
         changes_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         b.AddValidator(lambda old,new,change: new != 'test')
         with machine.Record():
             a.Set('hello')
@@ -146,9 +145,9 @@ class StateMachineTransition(unittest.TestCase):
     def test_try_except_in_on_set(self):
         changes_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
         c.AddValidator(lambda old,new,change: False)
         a.on_set += lambda value: b.Set(value + ' world')
 
@@ -171,11 +170,11 @@ class StateMachineTransition(unittest.TestCase):
     def test_fail_subtrees(self):
         changes_list = []
         machine = StateMachine(on_changes_made=lambda changes:changes_list.append(changes))
-        machine.AddTopic(a:=StringTopic('a',machine))
-        machine.AddTopic(b:=StringTopic('b',machine))
-        machine.AddTopic(c:=StringTopic('c',machine))
-        machine.AddTopic(d:=StringTopic('d',machine))
-        machine.AddTopic(e:=StringTopic('e',machine))
+        a=machine.AddTopic('a',StringTopic)
+        b=machine.AddTopic('b',StringTopic)
+        c=machine.AddTopic('c',StringTopic)
+        d=machine.AddTopic('d',StringTopic)
+        e=machine.AddTopic('e',StringTopic)
 
         a.on_set += lambda value: d.Set('newd')
         a.on_set += lambda value: b.Set('newb')

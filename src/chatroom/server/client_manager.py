@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import traceback
 from typing import Awaitable, Callable, Dict, List, Tuple
 from itertools import count
 from collections import defaultdict
@@ -8,7 +9,7 @@ from collections import defaultdict
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
 from chatroom import logger
-from chatroom.command import ChangeCommand
+from chatroom.topic_change import Change, SetChange
 
 def MakeMessage(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
@@ -37,11 +38,12 @@ class Client:
     
 
 class ClientManager:
-    def __init__(self) -> None:
+    def __init__(self,GetTopicValue) -> None:
+        self._GetTopicValue = GetTopicValue
         self._logger = logger.Logger(logger.DEBUG,"CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
-        self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._HandleSubscribe,'unsubscribe':self._HandleUnsubscribe}
+        self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._HandleSubscribe}
         self._subscriptions:defaultdict[str,set] =defaultdict(set)
         self._sending_queue:asyncio.Queue[Tuple[Client,Tuple,Dict]] = asyncio.Queue()
 
@@ -78,13 +80,13 @@ class ClientManager:
                     pass
 
         except ConnectionClosed as e:
-            self._logger.Info(f"Client {client_id} disconnected: {e.with_traceback(e.__traceback__)}")
+            self._logger.Info(f"Client {client_id} disconnected: {repr(e)}")
             self._CleanUpClient(client)
         except Exception as e:
-            self._logger.Error(f"Error handling client {client_id}: {e.with_traceback(e.__traceback__)}")
+            self._logger.Error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
             self._CleanUpClient(client)
 
-    def SendUpdate(self,changes:List[ChangeCommand]):
+    def SendUpdate(self,changes:List[Change]):
         '''
         Broadcast a list of changes to all clients subscribed to the topics in the changes.
         '''
@@ -107,6 +109,8 @@ class ClientManager:
     def _HandleSubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].add(sender.id)
         self._logger.Info(f"Client {sender.id} subscribed to {topic_name}")
+        value = self._GetTopicValue(topic_name)
+        self.Send(sender,"update",changes=[SetChange(topic_name,value).Serialize()])
 
     def _HandleUnsubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].discard(sender.id)
