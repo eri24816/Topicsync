@@ -6,14 +6,14 @@ import json
 import time
 from typing import TYPE_CHECKING, Any, Tuple, Type
 from typing import Callable, List, Optional
-from chatroom.topic_change import Change, InvalidChangeException, StringChangeTypes, SetChangeTypes, default_topic_value, typeValidator
+from chatroom.topic_change import Change, InvalidChangeError, StringChangeTypes, SetChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
 
 if TYPE_CHECKING:
     from chatroom.state_machine.state_machine import StateMachine
 
-def TopicFactory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
+def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
     if type == 'string':
         return StringTopic(topic_name,state_machine)
     if type == 'set':
@@ -22,30 +22,30 @@ def TopicFactory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
 
 class Topic(metaclass = abc.ABCMeta):
     @classmethod
-    def GetTypeName(cls):
+    def get_type_name(cls):
         return camel_to_snake(cls.__name__.replace('Topic',''))
     
     def __init__(self,name,state_machine:StateMachine):
         self._name = name
-        self._value = default_topic_value[self.GetTypeName()]
+        self._value = default_topic_value[self.get_type_name()]
         self._validators : List[Callable[[Any,Any,Change],bool]] = []
         self._state_machine = state_machine
         self.subscribers = []
     
-    def _ValidateChangeAndGetResult(self,change:Change):
+    def _validate_change_and_get_result(self,change:Change):
         '''
         Validate the change and return the new value. Raise InvalidChangeException if the change is invalid.
         '''
         old_value = self._value
         try:
-            new_value = change.Apply(copy.deepcopy(self._value))
-        except InvalidChangeException as e:
+            new_value = change.apply(copy.deepcopy(self._value))
+        except InvalidChangeError as e:
             e.topic = self
             raise e
     
         for validator in self._validators:
             if not validator(old_value,new_value,change):
-                raise InvalidChangeException(self,change,f'Change {change.Serialize()} is not valid for topic {self._name}. Old value: {json.dumps(old_value)}, invalid new value: {json.dumps(new_value)}')
+                raise InvalidChangeError(self,change,f'Change {change.serialize()} is not valid for topic {self._name}. Old value: {json.dumps(old_value)}, invalid new value: {json.dumps(new_value)}')
         
         return new_value
 
@@ -53,47 +53,47 @@ class Topic(metaclass = abc.ABCMeta):
     API
     '''
 
-    def GetName(self):
+    def get_name(self):
         return self._name
     
-    def GetValue(self):
+    def get_value(self):
         return copy.deepcopy(self._value)
     
-    def AddValidator(self,validator:Callable[[Any,Any,Change],bool]):
+    def add_validator(self,validator:Callable[[Any,Any,Change],bool]):
         '''
         Add a validator to the topic. The validator is a function that takes the old value, new value and the change as arguments and returns True if the change is valid and False otherwise.
         '''
         self._validators.append(validator)
 
-    def ApplyChangeExternal(self, change:Change):
+    def apply_change_external(self, change:Change):
         '''
         Call this when the user or the app wants to change the value of the topic. The change is then be executed by the state machine.
         '''
-        self._state_machine.ApplyChange(change)        
+        self._state_machine.apply_change(change)        
 
     '''
     Called by the state machine
     '''
 
-    def ApplyChange(self, change:Change, notify_listeners:bool = True):
+    def apply_change(self, change:Change, notify_listeners:bool = True):
         '''
         Set the value and notify listeners. 
 
         Note that only the state machine is allowed to call this method.
         '''
         old_value = self._value
-        new_value = self._ValidateChangeAndGetResult(change)
+        new_value = self._validate_change_and_get_result(change)
         self._value = new_value
         if notify_listeners:
             try:
-                self.NotifyListeners(change,old_value=old_value,new_value=self._value)
+                self.notify_listeners(change,old_value=old_value,new_value=self._value)
             except:
                 self._value = old_value
                 raise
         return old_value,new_value
 
     @abc.abstractmethod
-    def NotifyListeners(self,change:Change, old_value, new_value):
+    def notify_listeners(self,change:Change, old_value, new_value):
         '''
         Notify user-side listeners for a topic change. Every listener type work differently. Override this method in child classes to notify listeners of different types.
         
@@ -107,14 +107,14 @@ class StringTopic(Topic):
     '''
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
-        self.AddValidator(typeValidator(str))
+        self.add_validator(type_validator(str))
         self.on_set = Action()
     
     def Set(self, value):
         change = StringChangeTypes.SetChange(self._name,value)
-        self.ApplyChangeExternal(change)
+        self.apply_change_external(change)
 
-    def NotifyListeners(self,change:Change, old_value, new_value):
+    def notify_listeners(self,change:Change, old_value, new_value):
         if isinstance(change,StringChangeTypes.SetChange):
             self.on_set(new_value)
         else:
@@ -127,27 +127,27 @@ class SetTopic(Topic):
     
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
-        self.AddValidator(typeValidator(list))
+        self.add_validator(type_validator(list))
         self.on_set = Action()
         self.on_append = Action()
         self.on_remove = Action()
     
-    def Set(self, value):
+    def set(self, value):
         change = SetChangeTypes.SetChange(self._name,value)
-        self.ApplyChangeExternal(change)
+        self.apply_change_external(change)
 
-    def Append(self, item):
+    def append(self, item):
         change = SetChangeTypes.AppendChange(self._name,item)
-        self.ApplyChangeExternal(change)
+        self.apply_change_external(change)
 
-    def Remove(self, item):
+    def remove(self, item):
         change = SetChangeTypes.RemoveChange(self._name,item)
-        self.ApplyChangeExternal(change)        
+        self.apply_change_external(change)        
     
     def __len__(self):
         return len(self._value)
 
-    def NotifyListeners(self,change:Change, old_value:list, new_value:list):
+    def notify_listeners(self,change:Change, old_value:list, new_value:list):
         if isinstance(change,SetChangeTypes.SetChange):
             self.on_set(new_value)
             old_value_set = set(map(json.dumps,old_value))

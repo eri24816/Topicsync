@@ -29,10 +29,10 @@ class EventManager:
     def Resume(self,name,data=None):
         return self._event_pool.pop(name).set(data)
 
-def MakeMessage(message_type,**kwargs)->str:
+def make_message(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
 
-def ParseMessage(message_json)->Tuple[str,dict]:
+def parse_message(message_json)->Tuple[str,dict]:
     message = json.loads(message_json)
     return message["type"],message["args"]
 
