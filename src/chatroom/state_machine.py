@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
 from chatroom.topic import Topic, topic_factory
-from chatroom.topic_change import InvalidChangeError
+from chatroom.logger import Logger
 if TYPE_CHECKING:
-    from chatroom.topic_change import Change
+    from chatroom.change import Change
 
 class Transition:
     def __init__(self,changes:List[Change],action_source:int):
@@ -22,6 +22,7 @@ class StateMachine:
         self._on_transition_done = on_transition_done
         self._recursion_enabled = True
         self._apply_change_call_stack = []
+        self._logger = Logger(0,"State")
     
     T = TypeVar('T', bound=Topic)
     def add_topic(self,name:str,topic_type:type[T])->T:
@@ -60,7 +61,7 @@ class StateMachine:
             yield
         except Exception:
             self._is_recording = False
-            print("An error has occured in the transition. Cleaning up the failed transition.")
+            self._logger.warning("An error has occured in the transition. Cleaning up the failed transition.")
             self._cleanup_failed_transition()
             raise
         else:
@@ -82,7 +83,7 @@ class StateMachine:
                     topic.notify_listeners(inv_change,old_value,new_value)
                     self._changes_made.remove(change)
         except Exception as e:
-            print("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
+            self._logger.warning("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
             raise
 
     @contextmanager

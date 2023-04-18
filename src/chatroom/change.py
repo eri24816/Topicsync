@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional
 import copy
 
-from chatroom import logger
 if TYPE_CHECKING:
     from chatroom.topic import Topic
 '''
@@ -42,7 +41,6 @@ def type_validator(t):
 class Change: 
     @staticmethod
     def deserialize(change_dict:dict[str,Any])->Change:
-        print(change_dict)
         change_type, topic_type, change_dict = change_dict['type'], change_dict['topic_type'], remove_entry(remove_entry(change_dict,'type'),'topic_type')
         return type_name_to_change_types[topic_type].types[change_type](**change_dict)
     

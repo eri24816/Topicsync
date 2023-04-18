@@ -1,17 +1,13 @@
 from __future__ import annotations
-from collections import deque
-import contextlib
 import copy
 import json
-import time
-from typing import TYPE_CHECKING, Any, Tuple, Type
-from typing import Callable, List, Optional
-from chatroom.topic_change import Change, InvalidChangeError, StringChangeTypes, SetChangeTypes, default_topic_value, type_validator
+from typing import TYPE_CHECKING, Any, Callable, List
+from chatroom.change import Change, InvalidChangeError, StringChangeTypes, SetChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
 
 if TYPE_CHECKING:
-    from chatroom.state_machine.state_machine import StateMachine
+    from chatroom.state_machine import StateMachine
 
 def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
     if type == 'string':

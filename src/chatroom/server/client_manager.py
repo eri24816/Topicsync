@@ -9,7 +9,7 @@ from collections import defaultdict
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
 from chatroom import logger
-from chatroom.topic_change import Change, SetChange
+from chatroom.change import Change, SetChange
 
 def make_message(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
@@ -38,8 +38,8 @@ class Client:
     
 
 class ClientManager:
-    def __init__(self,GetTopicValue) -> None:
-        self._get_topic_value = GetTopicValue
+    def __init__(self,get_topic_value) -> None:
+        self._get_topic_value = get_topic_value
         self._logger = logger.Logger(logger.DEBUG,"CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
