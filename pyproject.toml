@@ -2,4 +2,5 @@
 name = "chatroom"
 version = "0.4"
 dependencies = [
+    'websockets',
 ]
