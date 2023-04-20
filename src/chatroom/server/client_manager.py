@@ -35,11 +35,10 @@ class Client:
     def send(self,*args,**kwargs):
         self._sending_queue.put_nowait((self,args,kwargs))
 
-    
-
 class ClientManager:
-    def __init__(self,get_topic_value) -> None:
+    def __init__(self,get_topic_value,exists_topic) -> None:
         self._get_topic_value = get_topic_value
+        self._exists_topic = exists_topic
         self._logger = logger.Logger(logger.DEBUG,"CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
@@ -107,6 +106,10 @@ class ClientManager:
             self._subscriptions[topic].discard(client.id)
 
     def _handle_subscribe(self,sender:Client,topic_name:str):
+        if not self._exists_topic(topic_name):
+            # This happens when a removal message of the topic is not yet arrived at the client
+            self._logger.warning(f"Client {sender.id} tried to subscribe to non-existent topic {topic_name}")
+            return
         self._subscriptions[topic_name].add(sender.id)
         self._logger.info(f"Client {sender.id} subscribed to {topic_name}")
         value = self._get_topic_value(topic_name)

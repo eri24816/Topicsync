@@ -65,7 +65,20 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Call this when the user or the app wants to change the value of the topic. The change is then be executed by the state machine.
         '''
-        self._state_machine.apply_change(change)        
+        self._state_machine.apply_change(change)     
+
+    def set_to_default(self):
+        '''
+        Set the topic to its default value.
+        '''
+        self.set(default_topic_value[self.get_type_name()])
+
+    @abc.abstractmethod
+    def set(self, value):
+        '''
+        Set the value of the topic.
+        '''
+        pass   
 
     '''
     Called by the state machine
@@ -106,7 +119,7 @@ class StringTopic(Topic):
         self.add_validator(type_validator(str))
         self.on_set = Action()
     
-    def Set(self, value):
+    def set(self, value):
         change = StringChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 

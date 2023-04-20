@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, Callable, Dict, List, TypeVar
 
 from websockets.server import serve as websockets_serve
+from chatroom import state_machine
 
 from chatroom.server.client_manager import ClientManager, Client
 from chatroom.state_machine import StateMachine, Transition
@@ -19,7 +20,9 @@ class ChatroomServer:
         def get_value(topic_name):
             topic = self._state_machine.get_topic(topic_name)
             return topic.get_value()
-        self._client_manager = ClientManager(get_value)
+        def exists_topic(topic_name):
+            return self._state_machine.has_topic(topic_name)
+        self._client_manager = ClientManager(get_value,exists_topic)
         self._services: Dict[str, Callable[..., Any]] = {}
         self._state_machine = StateMachine(self._on_changes_made,self._on_transition_done)
 
@@ -57,7 +60,7 @@ class ChatroomServer:
         self._client_manager.send_update(changes,actionID)
 
     """
-    Interface for router
+    Interface for clients
     """
 
     def _handle_action(self, sender:Client, commands: list[dict[str, Any]],action_id:str):
@@ -92,7 +95,7 @@ class ChatroomServer:
     T = TypeVar("T", bound=Topic)
     def get_topic(self, topic_name, type: type[T]) -> T:
         '''
-        Get a topic, or create it if it doesn't exist
+        Get a existing topic
         '''
         if self._state_machine.has_topic(topic_name):
             topic = self._state_machine.get_topic(topic_name)
@@ -103,7 +106,18 @@ class ChatroomServer:
         
     T = TypeVar("T", bound=Topic)
     def add_topic(self, topic_name, type: type[T]) -> T:
+        #TODO: Use dict for topic to imply topic_name check
+        if self._state_machine.has_topic(topic_name):
+            raise Exception(f"Topic {topic_name} already exists")
         self._topic_set.append({"topic_name":topic_name,"topic_type":type.get_type_name()})
         self._logger.debug(f"Added topic {topic_name}")
         return self.get_topic(topic_name,type)
         
+    def remove_topic(self, topic_name):
+        if not self._state_machine.has_topic(topic_name):
+            raise Exception(f"Topic {topic_name} does not exist")
+        topic = self.get_topic(topic_name,Topic)
+        with self._state_machine.record():
+            topic.set_to_default()
+            self._topic_set.remove({"topic_name":topic_name})
+        self._logger.debug(f"Removed topic {topic_name}")

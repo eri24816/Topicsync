@@ -11,9 +11,9 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         with machine.record():
-            a.Set('hello')
-            b.Set('world')
-            a.Set('hello2')
+            a.set('hello')
+            b.set('world')
+            a.set('hello2')
         self.assertEqual(a.get_value(),'hello2')
         self.assertEqual(b.get_value(),'world')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a','b','a'])
@@ -25,10 +25,10 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.Set('hello '+value)
-        b.on_set += lambda value: c.Set(value+'!')
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
         with machine.record():
-            a.Set('world')
+            a.set('world')
         self.assertEqual(a.get_value(),'world')
         self.assertEqual(b.get_value(),'hello world')
         self.assertEqual(c.get_value(),'hello world!')
@@ -41,19 +41,19 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.Set('hello '+value)
-        b.on_set += lambda value: c.Set(value+'!')
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
         b.add_validator(lambda old,new,change: new != 'hello world')
         with self.assertRaises(InvalidChangeError):
             with machine.record():
-                a.Set('world')
+                a.set('world')
         self.assertEqual(a.get_value(),'')
         self.assertEqual(b.get_value(),'')
         self.assertEqual(c.get_value(),'')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
 
         with machine.record():
-            a.Set('Eric')
+            a.set('Eric')
 
         self.assertEqual(a.get_value(),'Eric')
         self.assertEqual(b.get_value(),'hello Eric')
@@ -67,12 +67,12 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.Set('hello '+value)
-        b.on_set += lambda value: c.Set(value+'!')
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
         b.add_validator(lambda old,new,change: new != 'hello world')
         with machine.record():
             try:
-                a.Set('world')
+                a.set('world')
             except InvalidChangeError:
                 pass
         self.assertEqual(a.get_value(),'')
@@ -81,7 +81,7 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
         
         with machine.record():
-            a.Set('Eric')
+            a.set('Eric')
         
         self.assertEqual(a.get_value(),'Eric')
         self.assertEqual(b.get_value(),'hello Eric')
@@ -95,11 +95,11 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.Set('hello '+value)
-        b.on_set += lambda value: c.Set(value+'!')
-        c.on_set += lambda value: a.Set('NO ' + value)
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
+        c.on_set += lambda value: a.set('NO ' + value)
         with machine.record():
-            a.Set('world')
+            a.set('world')
 
         self.assertEqual(a.get_value(),'world')
         self.assertEqual(b.get_value(),'hello world')
@@ -114,8 +114,8 @@ class StateMachineTransition(unittest.TestCase):
         b.add_validator(lambda old,new,change: False)
         with self.assertRaises(InvalidChangeError):
             with machine.record():
-                a.Set('world')
-                b.Set('test')
+                a.set('world')
+                b.set('test')
         
         self.assertEqual(a.get_value(), '')
         self.assertEqual(b.get_value(), '')
@@ -129,12 +129,12 @@ class StateMachineTransition(unittest.TestCase):
         c=machine.add_topic('c',StringTopic)
         b.add_validator(lambda old,new,change: new != 'test')
         with machine.record():
-            a.Set('hello')
+            a.set('hello')
             try:
-                b.Set('test')
+                b.set('test')
             except:
-                b.Set('test1')
-            c.Set('world')
+                b.set('test1')
+            c.set('world')
         
         self.assertEqual(a.get_value(), 'hello')
         self.assertEqual(b.get_value(), 'test1')
@@ -148,18 +148,18 @@ class StateMachineTransition(unittest.TestCase):
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
         c.add_validator(lambda old,new,change: False)
-        a.on_set += lambda value: b.Set(value + ' world')
+        a.on_set += lambda value: b.set(value + ' world')
 
         def try_on_set(value):
             try:
-                c.Set('invalid')
+                c.set('invalid')
             except:
                 pass 
 
         b.on_set += try_on_set
 
         with machine.record():
-            a.Set('hello')
+            a.set('hello')
         
         self.assertEqual(a.get_value(), 'hello')
         self.assertEqual(b.get_value(), 'hello world')
@@ -175,14 +175,14 @@ class StateMachineTransition(unittest.TestCase):
         d=machine.add_topic('d',StringTopic)
         e=machine.add_topic('e',StringTopic)
 
-        a.on_set += lambda value: d.Set('newd')
-        a.on_set += lambda value: b.Set('newb')
-        b.on_set += lambda value: c.Set('newc')
+        a.on_set += lambda value: d.set('newd')
+        a.on_set += lambda value: b.set('newb')
+        b.on_set += lambda value: c.set('newc')
         c.add_validator(lambda old,new,change: False)
-        d.on_set += lambda value: e.Set('newe')
+        d.on_set += lambda value: e.set('newe')
         with machine.record():
             try:
-                a.Set('hello')
+                a.set('hello')
             except:
                 pass
         

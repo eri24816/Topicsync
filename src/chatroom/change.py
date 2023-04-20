@@ -67,13 +67,16 @@ class SetChange(Change):
         self.value = value
         self.old_value = old_value
     def apply(self, old_value):
+        if self.old_value != old_value:
+            # If the old value is different, then this change is not the same as the one that was sent to the server.
+            self.id = str(uuid.uuid4()) 
         self.old_value = old_value
         return copy.deepcopy(self.value)
     def inverse(self)->Change:
         return self.__class__(self.topic_name,copy.deepcopy(self.old_value),copy.deepcopy(self.value))
     def serialize(self):
         return {"topic_name":self.topic_name,"topic_type":"unknown","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-
+ 
 class StringChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
