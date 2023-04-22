@@ -12,10 +12,9 @@ from chatroom.change import Change
 
 
 class ChatroomServer:
-    def __init__(self, port: int, command_handler:Callable[[Any],None], host:str='localhost') -> None:
+    def __init__(self, port: int, host:str='localhost') -> None:
         self._port = port
         self._host = host
-        self._command_handler = command_handler
         self._logger = Logger(DEBUG, "Server")
         def get_value(topic_name):
             topic = self._state_machine.get_topic(topic_name)
