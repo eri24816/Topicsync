@@ -108,7 +108,8 @@ class ClientManager:
     def _handle_subscribe(self,sender:Client,topic_name:str):
         if not self._exists_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
-            self._logger.warning(f"Client {sender.id} tried to subscribe to non-existent topic {topic_name}")
+            #? Should we send a message to the client?
+            self._logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         self._subscriptions[topic_name].add(sender.id)
         self._logger.info(f"Client {sender.id} subscribed to {topic_name}")
