@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "Python: test1",
             "type": "python",
-            "request": "test",
-            "program": "${file}",
+            "request": "launch",
+            "program": "${workspaceFolder}\\scripts\\test1.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

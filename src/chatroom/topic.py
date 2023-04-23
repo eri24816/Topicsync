@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, List
-from chatroom.change import Change, InvalidChangeError, StringChangeTypes, SetChangeTypes, default_topic_value, type_validator
+from chatroom.change import Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -12,6 +12,10 @@ if TYPE_CHECKING:
 def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
     if type == 'string':
         return StringTopic(topic_name,state_machine)
+    if type == 'int':
+        return IntTopic(topic_name,state_machine)
+    if type == 'float':
+        return FloatTopic(topic_name,state_machine)
     if type == 'set':
         return SetTopic(topic_name,state_machine)
     raise ValueError(f'Unknown topic type {type}')
@@ -52,7 +56,7 @@ class Topic(metaclass = abc.ABCMeta):
     def get_name(self):
         return self._name
     
-    def get_value(self):
+    def get(self):
         return copy.deepcopy(self._value)
     
     def add_validator(self,validator:Callable[[Any,Any,Change],bool]):
@@ -124,10 +128,59 @@ class StringTopic(Topic):
         self.apply_change_external(change)
 
     def notify_listeners(self,change:Change, old_value, new_value):
-        if isinstance(change,StringChangeTypes.SetChange):
-            self.on_set(new_value)
-        else:
-            raise Exception(f'Unsupported change type {type(change)} for StringTopic')
+        match change:
+            case StringChangeTypes.SetChange():
+                self.on_set(new_value)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
+        
+class IntTopic(Topic):
+    '''
+    Int topic
+    '''
+    def __init__(self,name,state_machine:StateMachine):
+        super().__init__(name,state_machine)
+        self.add_validator(type_validator(int))
+        self.on_set = Action()
+    
+    def set(self, value:int):
+        change = IntChangeTypes.SetChange(self._name,value)
+        self.apply_change_external(change)
+
+    def add(self, value:int):
+        change = IntChangeTypes.AddChange(self._name,value)
+        self.apply_change_external(change)
+
+    def notify_listeners(self,change:Change, old_value, new_value):
+        match change:
+            case IntChangeTypes.SetChange() | IntChangeTypes.AddChange():
+                self.on_set(old_value, new_value)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
+        
+class FloatTopic(Topic):
+    '''
+    Int topic
+    '''
+    def __init__(self,name,state_machine:StateMachine):
+        super().__init__(name,state_machine)
+        self.add_validator(type_validator(float,int))
+        self.on_set = Action()
+    
+    def set(self, value:float):
+        change = FloatChangeTypes.SetChange(self._name,value)
+        self.apply_change_external(change)
+
+    def add(self, value:float):
+        change = FloatChangeTypes.AddChange(self._name,value)
+        self.apply_change_external(change)
+
+    def notify_listeners(self,change:Change, old_value, new_value):
+        match change:
+            case FloatChangeTypes.SetChange() | FloatChangeTypes.AddChange():
+                self.on_set(old_value, new_value)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class SetTopic(Topic):
     '''
@@ -157,22 +210,22 @@ class SetTopic(Topic):
         return len(self._value)
 
     def notify_listeners(self,change:Change, old_value:list, new_value:list):
-        if isinstance(change,SetChangeTypes.SetChange):
-            self.on_set(new_value)
-            old_value_set = set(map(json.dumps,old_value))
-            new_value_set = set(map(json.dumps,new_value))
-            removed_items = old_value_set - new_value_set
-            added_items = new_value_set - old_value_set
-            for item in removed_items:
-                self.on_remove(json.loads(item))
-            for item in added_items:
-                self.on_append(json.loads(item))
-
-        elif isinstance(change,SetChangeTypes.AppendChange):
-            self.on_set(new_value)
-            self.on_append(change.item)
-        elif isinstance(change,SetChangeTypes.RemoveChange):
-            self.on_set(new_value)
-            self.on_remove(change.item)
-        else:
-            raise Exception(f'Unsupported change type {type(change)} for SetTopic')
+        match change:
+            case SetChangeTypes.SetChange():
+                self.on_set(new_value)
+                old_value_set = set(map(json.dumps,old_value))
+                new_value_set = set(map(json.dumps,new_value))
+                removed_items = old_value_set - new_value_set
+                added_items = new_value_set - old_value_set
+                for item in removed_items:
+                    self.on_remove(json.loads(item))
+                for item in added_items:
+                    self.on_append(json.loads(item))
+            case SetChangeTypes.AppendChange():
+                self.on_set(new_value)
+                self.on_append(change.item)
+            case SetChangeTypes.RemoveChange():
+                self.on_set(new_value)
+                self.on_remove(change.item)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')

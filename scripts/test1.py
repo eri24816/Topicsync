@@ -2,7 +2,7 @@ from chatroom import ChatroomServer
 
 import asyncio
 
-from chatroom.topic import StringTopic, SetTopic
+from chatroom.topic import FloatTopic, IntTopic, StringTopic, SetTopic
 
 # client.makeRequest('add', {a:1,b:2}, (response: any) => {
 #     print('1+2=',response);
@@ -10,7 +10,7 @@ from chatroom.topic import StringTopic, SetTopic
 # client.makeRequest('greet', {name:'Eric'}, (response: any) => {
 #     print(response);
 # });
-server = ChatroomServer(8765,lambda x:None)
+server = ChatroomServer(8765)
 
 server.register_service('add',lambda a,b: a+b)
 server.register_service('greet',lambda name: 'Hello '+name)
@@ -23,4 +23,9 @@ t.on_remove += lambda value: s.remove(value+'!')
 s.on_append += lambda value: t.append(value[:-1])
 s.on_remove += lambda value: t.remove(value[:-1])
 t.append("hello")
+
+i=server.add_topic("i",IntTopic)
+f = server.add_topic("f",FloatTopic)
+
+
 asyncio.run(server.serve())

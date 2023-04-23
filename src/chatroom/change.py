@@ -33,9 +33,12 @@ def remove_entry(dictionary,key):
         del dictionary[key]
     return dictionary
 
-def type_validator(t):
+def type_validator(*ts):
     def f(old_value,new_value,change):
-        return isinstance(new_value,t)
+        for t in ts:
+            if isinstance(new_value,t):
+                return True
+        return False
     return f
 
 class Change: 
@@ -84,6 +87,42 @@ class StringChangeTypes:
         
     types = {'set':SetChange}
 
+class IntChangeTypes:
+    class SetChange(SetChange):
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"int","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+    
+    class AddChange(Change):
+        def __init__(self,topic_name, value,id=None):
+            super().__init__(topic_name,id)
+            self.value = value
+        def apply(self, old_value):
+            return old_value + self.value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"int","type":"add","value":self.value,"id":self.id}
+        def inverse(self)->Change:
+            return IntChangeTypes.AddChange(self.topic_name,-self.value)
+    
+    types = {'set':SetChange,'add':AddChange}
+
+class FloatChangeTypes:
+    class SetChange(SetChange):
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"float","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+    
+    class AddChange(Change):
+        def __init__(self,topic_name, value,id=None):
+            super().__init__(topic_name,id)
+            self.value = value
+        def apply(self, old_value):
+            return old_value + self.value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"float","type":"add","value":self.value,"id":self.id}
+        def inverse(self)->Change:
+            return IntChangeTypes.AddChange(self.topic_name,-self.value)
+    
+    types = {'set':SetChange,'add':AddChange}
+
 class SetChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
@@ -116,4 +155,9 @@ class SetChangeTypes:
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
-type_name_to_change_types = {'string':StringChangeTypes,'set':SetChangeTypes}
+type_name_to_change_types = {
+                                'string':StringChangeTypes,
+                                'int':IntChangeTypes,
+                                'float':FloatChangeTypes,
+                                'set':SetChangeTypes
+                            }
