@@ -14,8 +14,8 @@ class StateMachineTransition(unittest.TestCase):
             a.set('hello')
             b.set('world')
             a.set('hello2')
-        self.assertEqual(a.get_value(),'hello2')
-        self.assertEqual(b.get_value(),'world')
+        self.assertEqual(a.get(),'hello2')
+        self.assertEqual(b.get(),'world')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a','b','a'])
 
     def test_chain(self):
@@ -29,9 +29,9 @@ class StateMachineTransition(unittest.TestCase):
         b.on_set += lambda value: c.set(value+'!')
         with machine.record():
             a.set('world')
-        self.assertEqual(a.get_value(),'world')
-        self.assertEqual(b.get_value(),'hello world')
-        self.assertEqual(c.get_value(),'hello world!')
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'hello world')
+        self.assertEqual(c.get(),'hello world!')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a','b','c'])
 
     def test_failed_transition(self):
@@ -47,17 +47,17 @@ class StateMachineTransition(unittest.TestCase):
         with self.assertRaises(InvalidChangeError):
             with machine.record():
                 a.set('world')
-        self.assertEqual(a.get_value(),'')
-        self.assertEqual(b.get_value(),'')
-        self.assertEqual(c.get_value(),'')
+        self.assertEqual(a.get(),'')
+        self.assertEqual(b.get(),'')
+        self.assertEqual(c.get(),'')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
 
         with machine.record():
             a.set('Eric')
 
-        self.assertEqual(a.get_value(),'Eric')
-        self.assertEqual(b.get_value(),'hello Eric')
-        self.assertEqual(c.get_value(),'hello Eric!')
+        self.assertEqual(a.get(),'Eric')
+        self.assertEqual(b.get(),'hello Eric')
+        self.assertEqual(c.get(),'hello Eric!')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['a','b','c'])
 
     def test_failed_and_catched_tranition(self):
@@ -75,17 +75,17 @@ class StateMachineTransition(unittest.TestCase):
                 a.set('world')
             except InvalidChangeError:
                 pass
-        self.assertEqual(a.get_value(),'')
-        self.assertEqual(b.get_value(),'')
-        self.assertEqual(c.get_value(),'')
+        self.assertEqual(a.get(),'')
+        self.assertEqual(b.get(),'')
+        self.assertEqual(c.get(),'')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
         
         with machine.record():
             a.set('Eric')
         
-        self.assertEqual(a.get_value(),'Eric')
-        self.assertEqual(b.get_value(),'hello Eric')
-        self.assertEqual(c.get_value(),'hello Eric!')
+        self.assertEqual(a.get(),'Eric')
+        self.assertEqual(b.get(),'hello Eric')
+        self.assertEqual(c.get(),'hello Eric!')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['a','b','c'])
     
     def test_prevent_recursive_change(self):
@@ -101,9 +101,9 @@ class StateMachineTransition(unittest.TestCase):
         with machine.record():
             a.set('world')
 
-        self.assertEqual(a.get_value(),'world')
-        self.assertEqual(b.get_value(),'hello world')
-        self.assertEqual(c.get_value(),'hello world!')
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'hello world')
+        self.assertEqual(c.get(),'hello world!')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a', 'b', 'c'])
 
     def test_fail_set_without_except(self):
@@ -117,8 +117,8 @@ class StateMachineTransition(unittest.TestCase):
                 a.set('world')
                 b.set('test')
         
-        self.assertEqual(a.get_value(), '')
-        self.assertEqual(b.get_value(), '')
+        self.assertEqual(a.get(), '')
+        self.assertEqual(b.get(), '')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
 
     def test_fail_set_with_except(self):
@@ -136,9 +136,9 @@ class StateMachineTransition(unittest.TestCase):
                 b.set('test1')
             c.set('world')
         
-        self.assertEqual(a.get_value(), 'hello')
-        self.assertEqual(b.get_value(), 'test1')
-        self.assertEqual(c.get_value(), 'world')
+        self.assertEqual(a.get(), 'hello')
+        self.assertEqual(b.get(), 'test1')
+        self.assertEqual(c.get(), 'world')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a', 'b', 'c'])
 
     def test_try_except_in_on_set(self):
@@ -161,9 +161,9 @@ class StateMachineTransition(unittest.TestCase):
         with machine.record():
             a.set('hello')
         
-        self.assertEqual(a.get_value(), 'hello')
-        self.assertEqual(b.get_value(), 'hello world')
-        self.assertEqual(c.get_value(), '')
+        self.assertEqual(a.get(), 'hello')
+        self.assertEqual(b.get(), 'hello world')
+        self.assertEqual(c.get(), '')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a', 'b'])
 
     def test_fail_subtrees(self):
@@ -186,9 +186,9 @@ class StateMachineTransition(unittest.TestCase):
             except:
                 pass
         
-        self.assertEqual(a.get_value(), '')
-        self.assertEqual(b.get_value(), '')
-        self.assertEqual(c.get_value(), '')
-        self.assertEqual(d.get_value(), '')
-        self.assertEqual(e.get_value(), '')
+        self.assertEqual(a.get(), '')
+        self.assertEqual(b.get(), '')
+        self.assertEqual(c.get(), '')
+        self.assertEqual(d.get(), '')
+        self.assertEqual(e.get(), '')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])

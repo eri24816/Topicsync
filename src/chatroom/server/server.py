@@ -18,7 +18,7 @@ class ChatroomServer:
         self._logger = Logger(DEBUG, "Server")
         def get_value(topic_name):
             topic = self._state_machine.get_topic(topic_name)
-            return topic.get_value()
+            return topic.get()
         def exists_topic(topic_name):
             return self._state_machine.has_topic(topic_name)
         self._client_manager = ClientManager(get_value,exists_topic)
