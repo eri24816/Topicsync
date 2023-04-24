@@ -1,8 +1,8 @@
 from __future__ import annotations
 import copy
 import json
-from typing import TYPE_CHECKING, Any, Callable, List
-from chatroom.change import Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
+from chatroom.change import GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -10,6 +10,11 @@ if TYPE_CHECKING:
     from chatroom.state_machine import StateMachine
 
 def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
+    '''
+    Create a topic of the given type.
+    '''
+    if type == 'generic':
+        return GenericTopic(topic_name,state_machine)
     if type == 'string':
         return StringTopic(topic_name,state_machine)
     if type == 'int':
@@ -30,7 +35,6 @@ class Topic(metaclass = abc.ABCMeta):
         self._value = default_topic_value[self.get_type_name()]
         self._validators : List[Callable[[Any,Any,Change],bool]] = []
         self._state_machine = state_machine
-        self.subscribers = []
     
     def _validate_change_and_get_result(self,change:Change):
         '''
@@ -113,6 +117,26 @@ class Topic(metaclass = abc.ABCMeta):
         Note that only a state machine or this topic are allowed to call this method.
         '''
         pass
+
+T = TypeVar('T')
+class GenericTopic(Topic,Generic[T]):
+    '''
+    Topic of any/generic type (as long as it is JSON serializable)
+    '''
+    def __init__(self,name,state_machine:StateMachine):
+        super().__init__(name,state_machine)
+        self.on_set = Action()
+    
+    def set(self, value:T):
+        change = GenericChangeTypes.SetChange(self._name,value)
+        self.apply_change_external(change)
+
+    def notify_listeners(self,change:Change, old_value, new_value):
+        match change:
+            case GenericChangeTypes.SetChange():
+                self.on_set(old_value, new_value)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class StringTopic(Topic):
     '''

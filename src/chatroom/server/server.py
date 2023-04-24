@@ -98,6 +98,8 @@ class ChatroomServer:
         '''
         if self._state_machine.has_topic(topic_name):
             topic = self._state_machine.get_topic(topic_name)
+            if type.get_type_name() == 'generic':
+                return topic # type: ignore
             assert isinstance(topic, type)
             return topic
         else:

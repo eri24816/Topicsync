@@ -19,6 +19,7 @@ class InvalidChangeError(Exception):
         self.reason = reason
 
 default_topic_value = {
+    'generic':None,
     'string':'',
     'int':0,
     'float':0.0,
@@ -79,7 +80,14 @@ class SetChange(Change):
         return self.__class__(self.topic_name,copy.deepcopy(self.old_value),copy.deepcopy(self.value))
     def serialize(self):
         return {"topic_name":self.topic_name,"topic_type":"unknown","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
- 
+
+class GenericChangeTypes:
+    class SetChange(SetChange):
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"generic","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+        
+    types = {'set':SetChange}
+
 class StringChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
@@ -156,6 +164,7 @@ class SetChangeTypes:
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
 type_name_to_change_types = {
+                                'generic':GenericChangeTypes,
                                 'string':StringChangeTypes,
                                 'int':IntChangeTypes,
                                 'float':FloatChangeTypes,
