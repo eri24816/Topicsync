@@ -41,15 +41,11 @@ class Topic(metaclass = abc.ABCMeta):
         Validate the change and return the new value. Raise InvalidChangeException if the change is invalid.
         '''
         old_value = self._value
-        try:
-            new_value = change.apply(copy.deepcopy(self._value))
-        except InvalidChangeError as e:
-            e.topic = self
-            raise e
+        new_value = change.apply(copy.deepcopy(self._value))
     
         for validator in self._validators:
             if not validator(old_value,new_value,change):
-                raise InvalidChangeError(self,change,f'Change {change.serialize()} is not valid for topic {self._name}. Old value: {json.dumps(old_value)}, invalid new value: {json.dumps(new_value)}')
+                raise InvalidChangeError(change,'Validator failed') #TODO: Add more info
         
         return new_value
 

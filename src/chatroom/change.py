@@ -12,9 +12,8 @@ The server then sends the change to all the subscribers of the topic.
 import uuid
 
 class InvalidChangeError(Exception):
-    def __init__(self,topic:Optional[Topic],change:Change,reason:str):
-        super().__init__(f'Invalid change {change.serialize()} for topic {topic.get_name() if topic is not None else "unknown"}: {reason}')
-        self.topic = topic
+    def __init__(self,change:Change,reason:str):
+        super().__init__(f'Invalid {change.__class__.__name__} for topic {change.topic_name}: {reason} Change: {change.serialize()}')
         self.change = change
         self.reason = reason
 
@@ -140,6 +139,8 @@ class SetChangeTypes:
             super().__init__(topic_name,id)
             self.item = item
         def apply(self, old_value):
+            if self.item in old_value:
+                raise InvalidChangeError(self,f'Adding {repr(self.item)} to {old_value} would create a duplicate.')
             return old_value + [self.item]
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"set","type":"append","item":self.item,"id":self.id}
@@ -152,7 +153,7 @@ class SetChangeTypes:
             self.item = item
         def apply(self, old_value):
             if self.item not in old_value:
-                raise InvalidChangeError(None,self,f'Cannot remove {self.item} from {old_value}')
+                raise InvalidChangeError(self,f'Cannot remove {self.item} from {old_value}')
             new_value = old_value[:]
             new_value.remove(self.item)
             return new_value
