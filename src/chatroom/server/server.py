@@ -12,7 +12,7 @@ from chatroom.change import Change
 
 
 class ChatroomServer:
-    def __init__(self, port: int, host:str='localhost') -> None:
+    def __init__(self, port: int, host:str='localhost',on_transition_done=lambda transition:None) -> None:
         self._port = port
         self._host = host
         self._logger = Logger(DEBUG, "Server")
@@ -23,7 +23,7 @@ class ChatroomServer:
             return self._state_machine.has_topic(topic_name)
         self._client_manager = ClientManager(get_value,exists_topic)
         self._services: Dict[str, Callable[..., Any]] = {}
-        self._state_machine = StateMachine(self._on_changes_made,self._on_transition_done)
+        self._state_machine = StateMachine(self._on_changes_made,on_transition_done)
 
         self._topic_set = self._state_machine.add_topic("_chatroom/topics",SetTopic)
         self._topic_set.append({"topic_name":"_chatroom/topics","topic_type":"set"})
@@ -49,11 +49,6 @@ class ChatroomServer:
     """
     Callbacks
     """
-
-    def _on_transition_done(self, transition: Transition):
-        """
-        Called when the state machine finishes a transition
-        """
 
     def _on_changes_made(self, changes:List[Change],actionID:str):
         self._client_manager.send_update(changes,actionID)
@@ -122,3 +117,9 @@ class ChatroomServer:
             topic.set_to_default()
             self._topic_set.remove({"topic_name":topic_name})
         self._logger.debug(f"Removed topic {topic_name}")
+
+    def undo(self,transition:Transition):
+        self._state_machine.undo(transition)
+
+    def redo(self,transition:Transition):
+        self._state_machine.redo(transition)

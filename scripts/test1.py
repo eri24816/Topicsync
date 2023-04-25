@@ -1,4 +1,4 @@
-from chatroom import ChatroomServer
+from chatroom import ChatroomServer, HistoryManager
 
 import asyncio
 
@@ -10,10 +10,18 @@ from chatroom.topic import FloatTopic, IntTopic, StringTopic, SetTopic, GenericT
 # client.makeRequest('greet', {name:'Eric'}, (response: any) => {
 #     print(response);
 # });
-server = ChatroomServer(8765)
+
+history = HistoryManager()
+server = ChatroomServer(8765,on_transition_done = history.add_transition)
+history.set_server(server)
+
+server.register_service('undo',history.undo)
+server.register_service('redo',history.redo)
+
 
 server.register_service('add',lambda a,b: a+b)
 server.register_service('greet',lambda name: 'Hello '+name)
+
 
 server.add_topic("a",StringTopic)
 s=server.add_topic("s",SetTopic)

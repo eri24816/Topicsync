@@ -1,4 +1,5 @@
 from __future__ import annotations
+import traceback
 from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
@@ -20,7 +21,7 @@ class StateMachine:
         self._changes_made : List[Change] = []
         self._on_changes_made = on_changes_made
         self._on_transition_done = on_transition_done
-        self._recursion_enabled = True
+        self._max_recursive_depth = 1e4
         self._apply_change_call_stack = []
         self._logger = Logger(0,"State")
     
@@ -45,15 +46,18 @@ class StateMachine:
         return topic_name in self._state
 
     @contextmanager
-    def _disable_recursion(self):
-        self._recursion_enabled = False
+    def _limit_recursion(self,max_depth:int = 0):
+        self._max_recursive_depth = max_depth
         try:
             yield
         finally:
-            self._recursion_enabled = True
+            self._max_recursive_depth = 1e4
 
     @contextmanager
-    def record(self,action_source:int = 0,action_id:str = ''):
+    def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True):
+        #TODO: thread lock
+        if self._is_recording and not allow_reentry:
+            raise RuntimeError("Cannot call record while already recording")
         self._is_recording = True
         self._error_has_occured_in_transition = False
         self._changes_made = []
@@ -61,13 +65,14 @@ class StateMachine:
             yield
         except Exception:
             self._is_recording = False
-            self._logger.warning("An error has occured in the transition. Cleaning up the failed transition.")
+            self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was: " + str(traceback.format_exc()))
             self._cleanup_failed_transition()
             raise
         else:
             self._is_recording = False
-            new_transition = Transition(self._current_transition,action_source)
-            self._on_transition_done(new_transition)
+            if emit_transition:
+                new_transition = Transition(self._current_transition,action_source)
+                self._on_transition_done(new_transition)
         finally:
             self._is_recording = False
             self._on_changes_made(self._changes_made,action_id)
@@ -76,7 +81,7 @@ class StateMachine:
 
     def _cleanup_failed_transition(self):
         try:
-            with self._disable_recursion():
+            with self._limit_recursion():
                 for change in reversed(self._current_transition):
                     topic,inv_change = self.get_topic(change.topic_name),change.inverse()
                     old_value,new_value = topic.apply_change(inv_change,notify_listeners=False)
@@ -96,50 +101,64 @@ class StateMachine:
 
     def apply_change(self,change:Change):
         #TODO: stateless topic branch
-        if not self._recursion_enabled:
+        if len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
             return
         if not self._is_recording:
             with self.record():
                 self.apply_change(change)
             return
         
-        # Prevents infinite recursion
+        # Prevent infinite recursion
+        
         if change.topic_name in self._apply_change_call_stack:
             return
         
-        with self._track_apply_change(change.topic_name):
-            topic = self.get_topic(change.topic_name)
+        # Apply the change
+        
+        self._current_transition.append(change)
+        self._changes_made.append(change)
+        topic = self.get_topic(change.topic_name)
 
-            self._current_transition.append(change)
-            self._changes_made.append(change)
-            try:
+        try:
+            with self._track_apply_change(change.topic_name):
                 topic.apply_change(change)
-            except:
-                # Undo the subtree which was applied in consequence of this change
-                self._undo_subtree(self._current_transition,change)
-                raise
+        except:
+            # Undo the subtree which was applied in consequence of this change
+            self._undo_subtree(self._current_transition,change)
+            raise
 
     def _undo_subtree(self,transition:List[Change],root_of_subtree:Change):
-        with self._disable_recursion():
-            while (change_to_revert := transition.pop()) != root_of_subtree:
-                target_topic = self.get_topic(change_to_revert.topic_name)
-                target_topic.apply_change(change_to_revert.inverse())
-                self._changes_made.remove(change_to_revert)
+        with self._limit_recursion():
+            while (change := transition.pop()) != root_of_subtree:
+                topic,inv_change = self.get_topic(change.topic_name),change.inverse()
+                topic.apply_change(inv_change)
+                self._changes_made.remove(change)
         
         self._changes_made.remove(root_of_subtree)
 
-    def undo(self, transition: Transition):
-        with self._disable_recursion():
-            for change in reversed(transition.changes):
-                topic,inv_change = self.get_topic(change.topic_name),change.inverse()
-                topic.apply_change(inv_change)
-        self._on_changes_made(transition.changes,'')
+    def undo(self, transition: Transition, action_source=0):
+        # Record the changes made by the undo
+        # Undo should not be recorded as a transition
+        with self.record(action_source=action_source,emit_transition=False):
+            # Block recursive calls to change stateful topics. Only to undo the transition
+            with self._limit_recursion(1):
+                # Revert the transition
+                for change in reversed(transition.changes):
+                    self._logger.debug("Undoing by change: " +str(change.inverse().serialize()))
+                    self._logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
+                    self.apply_change(change.inverse())
+                    self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
     
     def redo(self, transition: Transition):
-        raise NotImplementedError
-    
-        with self._disable_recursion():
-                ...
-        self._NotifyChanges()
-
+        # Record the changes made by the undo
+        # Redo should not be recorded as a transition
+        with self.record(emit_transition=False):
+            # Block recursive calls to change stateful topics. Only to undo the transition
+            with self._limit_recursion(1):
+                # Revert the transition
+                for change in transition.changes:
+                    self._logger.debug("Redoing change: " +str(change.serialize()))
+                    self._logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
+                    self.apply_change(change)
+                    self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
 

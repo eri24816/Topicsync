@@ -192,3 +192,95 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(d.get(), '')
         self.assertEqual(e.get(), '')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
+
+from chatroom import HistoryManager
+class StateMachineUndoRedo(unittest.TestCase):
+    def test_undo_redo(self):
+        history = HistoryManager()
+        machine = StateMachine(on_transition_done=history.add_transition)
+        history.set_server(machine)
+
+        a=machine.add_topic('a',StringTopic)
+        b=machine.add_topic('b',StringTopic)
+        c=machine.add_topic('c',StringTopic)
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
+        a.set('world')
+        b.set('uwu')
+        c.set('owo')
+
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'owo')
+        
+        history.undo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'uwu!')
+
+        history.undo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'hello world')
+        self.assertEqual(c.get(),'hello world!')
+
+        history.undo()
+        self.assertEqual(a.get(),'')
+        self.assertEqual(b.get(),'')
+        self.assertEqual(c.get(),'')
+
+        history.redo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'hello world')
+        self.assertEqual(c.get(),'hello world!')
+
+        history.redo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'uwu!')
+
+        history.redo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'owo')
+
+    def test_undo_redo_2(self):
+        history = HistoryManager()
+        machine = StateMachine(on_transition_done=history.add_transition)
+        history.set_server(machine)
+
+        a=machine.add_topic('a',StringTopic)
+        b=machine.add_topic('b',StringTopic)
+        c=machine.add_topic('c',StringTopic)
+        a.on_set += lambda value: b.set('hello '+value)
+        b.on_set += lambda value: c.set(value+'!')
+        with machine.record():
+            a.set('world')
+            b.set('uwu')
+
+        with machine.record():
+            c.set('owo')
+            a.set('chatroom')
+
+        self.assertEqual(a.get(),'chatroom')
+        self.assertEqual(b.get(),'hello chatroom')
+        self.assertEqual(c.get(),'hello chatroom!')
+
+        history.undo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'uwu!')
+
+        history.undo()
+        self.assertEqual(a.get(),'')
+        self.assertEqual(b.get(),'')
+        self.assertEqual(c.get(),'')
+
+        history.redo()
+        self.assertEqual(a.get(),'world')
+        self.assertEqual(b.get(),'uwu')
+        self.assertEqual(c.get(),'uwu!')
+
+        history.redo()
+        self.assertEqual(a.get(),'chatroom')
+        self.assertEqual(b.get(),'hello chatroom')
+        self.assertEqual(c.get(),'hello chatroom!')
