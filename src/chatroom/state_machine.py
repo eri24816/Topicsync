@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
 class Transition:
     def __init__(self,changes:List[Change],action_source:int):
-        self._changes = changes
-        self._action_source = action_source
+        self.changes = changes
+        self.action_source = action_source
 
 class StateMachine:
     def __init__(self, on_changes_made:Callable[[List[Change],str], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
@@ -115,26 +115,25 @@ class StateMachine:
             try:
                 topic.apply_change(change)
             except:
-                # undo the whole subtree
-                while self._current_transition[-1] != change:
-                    topic = self._current_transition[-1].topic_name
-                    change = self._current_transition[-1]
-                    self.get_topic(topic).apply_change(change.inverse(), notify_listeners=False)
-                    
-                    #! todo: separate _changes_made and _current_transition
-                    del self._current_transition[-1]
-                    del self._changes_made[-1]
-
-                del self._current_transition[-1]
-                del self._changes_made[-1]
+                # Undo the subtree which was applied in consequence of this change
+                self._undo_subtree(self._current_transition,change)
                 raise
 
-    def undo(self, transition: Transition):
-        raise NotImplementedError
-        
+    def _undo_subtree(self,transition:List[Change],root_of_subtree:Change):
         with self._disable_recursion():
-            ...
-        self._NotifyChanges()
+            while (change_to_revert := transition.pop()) != root_of_subtree:
+                target_topic = self.get_topic(change_to_revert.topic_name)
+                target_topic.apply_change(change_to_revert.inverse())
+                self._changes_made.remove(change_to_revert)
+        
+        self._changes_made.remove(root_of_subtree)
+
+    def undo(self, transition: Transition):
+        with self._disable_recursion():
+            for change in reversed(transition.changes):
+                topic,inv_change = self.get_topic(change.topic_name),change.inverse()
+                topic.apply_change(inv_change)
+        self._on_changes_made(transition.changes,'')
     
     def redo(self, transition: Transition):
         raise NotImplementedError
