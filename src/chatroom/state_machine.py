@@ -84,11 +84,10 @@ class StateMachine:
             with self._limit_recursion():
                 for change in reversed(self._current_transition):
                     topic,inv_change = self.get_topic(change.topic_name),change.inverse()
-                    old_value,new_value = topic.apply_change(inv_change,notify_listeners=False)
-                    topic.notify_listeners(inv_change,old_value,new_value)
+                    topic.apply_change(inv_change)
                     self._changes_made.remove(change)
         except Exception as e:
-            self._logger.warning("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
+            self._logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
             raise
 
     @contextmanager
