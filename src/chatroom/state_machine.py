@@ -46,7 +46,7 @@ class StateMachine:
         return topic_name in self._state
 
     @contextmanager
-    def _limit_recursion(self,max_depth:int = 0):
+    def _block_recursion(self,max_depth:int = 0):
         self._max_recursive_depth = max_depth
         try:
             yield
@@ -65,12 +65,12 @@ class StateMachine:
             yield
         except Exception:
             self._is_recording = False
-            self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was: " + str(traceback.format_exc()))
+            self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
             self._cleanup_failed_transition()
             raise
         else:
             self._is_recording = False
-            if emit_transition:
+            if len(self._current_transition) and emit_transition:
                 new_transition = Transition(self._current_transition,action_source)
                 self._on_transition_done(new_transition)
         finally:
@@ -81,13 +81,13 @@ class StateMachine:
 
     def _cleanup_failed_transition(self):
         try:
-            with self._limit_recursion():
+            with self._block_recursion():
                 for change in reversed(self._current_transition):
                     topic,inv_change = self.get_topic(change.topic_name),change.inverse()
                     topic.apply_change(inv_change)
                     self._changes_made.remove(change)
         except Exception as e:
-            self._logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: " + str(e))
+            self._logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" + str(e))
             raise
 
     @contextmanager
@@ -99,36 +99,41 @@ class StateMachine:
             self._apply_change_call_stack.pop()
 
     def apply_change(self,change:Change):
-        #TODO: stateless topic branch
-        if len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
+        
+        topic = self.get_topic(change.topic_name)
+
+        # Within self._block_recursion context, recursive depth for stateful topics is limited
+        if topic.is_stateful() and len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
             return
+        
+        # Enter record context if not already in it
         if not self._is_recording:
             with self.record():
                 self.apply_change(change)
             return
         
         # Prevent infinite recursion
-        
         if change.topic_name in self._apply_change_call_stack:
             return
         
         # Apply the change
         
-        self._current_transition.append(change)
+        if topic.is_stateful():
+            self._current_transition.append(change)
         self._changes_made.append(change)
-        topic = self.get_topic(change.topic_name)
 
         try:
             with self._track_apply_change(change.topic_name):
                 topic.apply_change(change)
         except:
-            # Undo the subtree which was applied in consequence of this change
-            self._undo_subtree(self._current_transition,change)
+            # Undo the subtree of changes which was caused in consequence of this change
+            if topic.is_stateful():
+                self._undo_subtree(change)
             raise
 
-    def _undo_subtree(self,transition:List[Change],root_of_subtree:Change):
-        with self._limit_recursion():
-            while (change := transition.pop()) != root_of_subtree:
+    def _undo_subtree(self,root_of_subtree:Change):
+        with self._block_recursion():
+            while (change := self._current_transition.pop()) != root_of_subtree:
                 topic,inv_change = self.get_topic(change.topic_name),change.inverse()
                 topic.apply_change(inv_change)
                 self._changes_made.remove(change)
@@ -139,8 +144,8 @@ class StateMachine:
         # Record the changes made by the undo
         # Undo should not be recorded as a transition
         with self.record(action_source=action_source,emit_transition=False):
-            # Block recursive calls to change stateful topics. Only to undo the transition
-            with self._limit_recursion(1):
+            # Block recursive calls to change stateful topics. Only to undo the transition itself
+            with self._block_recursion(1):
                 # Revert the transition
                 for change in reversed(transition.changes):
                     self._logger.debug("Undoing by change: " +str(change.inverse().serialize()))
@@ -149,11 +154,11 @@ class StateMachine:
                     self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
     
     def redo(self, transition: Transition):
-        # Record the changes made by the undo
+        # Record the changes made by the redo
         # Redo should not be recorded as a transition
         with self.record(emit_transition=False):
-            # Block recursive calls to change stateful topics. Only to undo the transition
-            with self._limit_recursion(1):
+            # Block recursive calls to change stateful topics. Only to redo the transition itself
+            with self._block_recursion(1):
                 # Revert the transition
                 for change in transition.changes:
                     self._logger.debug("Redoing change: " +str(change.serialize()))

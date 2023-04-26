@@ -30,11 +30,23 @@ class Topic(metaclass = abc.ABCMeta):
     def get_type_name(cls):
         return camel_to_snake(cls.__name__.replace('Topic',''))
     
-    def __init__(self,name,state_machine:StateMachine):
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True):
         self._name = name
         self._value = default_topic_value[self.get_type_name()]
         self._validators : List[Callable[[Any,Any,Change],bool]] = []
         self._state_machine = state_machine
+        self._is_stateful = is_stateful
+
+        self.on_set = Action()
+        """args:
+        - value: the new value
+        """
+
+        self.on_set2 = Action()
+        """args: 
+        - before: the old value
+        - after: the new value
+        """
     
     def _validate_change_and_get_result(self,change:Change):
         '''
@@ -105,14 +117,19 @@ class Topic(metaclass = abc.ABCMeta):
                 raise
         return old_value,new_value
 
-    @abc.abstractmethod
     def notify_listeners(self,change:Change, old_value, new_value):
         '''
         Notify user-side listeners for a topic change. Every listener type work differently. Override this method in child classes to notify listeners of different types.
         
         Note that only a state machine or this topic are allowed to call this method.
+
+        Override this method to notify listeners of different change types.
         '''
-        pass
+        self.on_set(new_value)
+        self.on_set2(old_value, new_value)
+
+    def is_stateful(self):
+        return self._is_stateful
 
 T = TypeVar('T')
 class GenericTopic(Topic,Generic[T]):
@@ -121,18 +138,10 @@ class GenericTopic(Topic,Generic[T]):
     '''
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
-        self.on_set = Action()
     
     def set(self, value:T):
         change = GenericChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
-
-    def notify_listeners(self,change:Change, old_value, new_value):
-        match change:
-            case GenericChangeTypes.SetChange():
-                self.on_set(old_value, new_value)
-            case _:
-                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class StringTopic(Topic):
     '''
@@ -146,13 +155,6 @@ class StringTopic(Topic):
     def set(self, value):
         change = StringChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
-
-    def notify_listeners(self,change:Change, old_value, new_value):
-        match change:
-            case StringChangeTypes.SetChange():
-                self.on_set(new_value)
-            case _:
-                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
         
 class IntTopic(Topic):
     '''
@@ -170,13 +172,6 @@ class IntTopic(Topic):
     def add(self, value:int):
         change = IntChangeTypes.AddChange(self._name,value)
         self.apply_change_external(change)
-
-    def notify_listeners(self,change:Change, old_value, new_value):
-        match change:
-            case IntChangeTypes.SetChange() | IntChangeTypes.AddChange():
-                self.on_set(old_value, new_value)
-            case _:
-                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
         
 class FloatTopic(Topic):
     '''
@@ -194,13 +189,6 @@ class FloatTopic(Topic):
     def add(self, value:float):
         change = FloatChangeTypes.AddChange(self._name,value)
         self.apply_change_external(change)
-
-    def notify_listeners(self,change:Change, old_value, new_value):
-        match change:
-            case FloatChangeTypes.SetChange() | FloatChangeTypes.AddChange():
-                self.on_set(old_value, new_value)
-            case _:
-                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class SetTopic(Topic):
     '''
@@ -230,9 +218,9 @@ class SetTopic(Topic):
         return len(self._value)
 
     def notify_listeners(self,change:Change, old_value:list, new_value:list):
+        super().notify_listeners(change,old_value,new_value)
         match change:
             case SetChangeTypes.SetChange():
-                self.on_set(new_value)
                 old_value_set = set(map(json.dumps,old_value))
                 new_value_set = set(map(json.dumps,new_value))
                 removed_items = old_value_set - new_value_set
@@ -242,10 +230,8 @@ class SetTopic(Topic):
                 for item in added_items:
                     self.on_append(json.loads(item))
             case SetChangeTypes.AppendChange():
-                self.on_set(new_value)
                 self.on_append(change.item)
             case SetChangeTypes.RemoveChange():
-                self.on_set(new_value)
                 self.on_remove(change.item)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')

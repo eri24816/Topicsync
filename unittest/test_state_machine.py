@@ -194,7 +194,7 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),[])
 
 from chatroom import HistoryManager
-class StateMachineUndoRedo(unittest.TestCase):
+class UndoRedo(unittest.TestCase):
     def test_undo_redo(self):
         history = HistoryManager()
         machine = StateMachine(on_transition_done=history.add_transition)
