@@ -1,4 +1,6 @@
 import threading
+from termcolor import colored
+from traitlets import default
 lock = threading.Lock()
 DEBUG = 1
 INFO = 2
@@ -12,16 +14,27 @@ level_names = {
     ERROR: 'ERROR'
 }
 
+default_color = {
+    DEBUG: 'blue',
+    INFO: 'white',
+    WARNING: 'yellow',
+    ERROR: 'red'
+}
+
 class Logger:
     def __init__(self,level=INFO,prefix=""):
         self._level = level
         self._prefix = prefix
 
-    def log(self,message,level=INFO):
-        lock.acquire()
+    def log(self,message,level=INFO,color=None,on_color=None):
         if level >= self._level:
-            print(f'{self._prefix} [{level_names[level]}] {message}',flush=True)
-        lock.release()
+            message = f'{self._prefix} [{level_names[level]}] {message}'
+            if color is None:
+                color = default_color[level]
+            message = colored(message,color,on_color)
+            lock.acquire()
+            print(message,flush=True)
+            lock.release()
 
     def debug(self,message):
         self.log(message,DEBUG)

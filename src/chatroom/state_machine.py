@@ -56,8 +56,12 @@ class StateMachine:
     @contextmanager
     def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True):
         #TODO: thread lock
-        if self._is_recording and not allow_reentry:
-            raise RuntimeError("Cannot call record while already recording")
+        if self._is_recording:
+            if not allow_reentry:
+                raise RuntimeError("Cannot call record while already recording")
+            else:
+                yield
+                return
         self._is_recording = True
         self._error_has_occured_in_transition = False
         self._changes_made = []

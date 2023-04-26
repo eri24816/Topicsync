@@ -113,9 +113,10 @@ class ChatroomServer:
         if not self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} does not exist")
         topic = self.get_topic(topic_name,Topic)
-        with self._state_machine.record():
+        topic_type = topic.get_type_name()
+        with self._state_machine.record(allow_reentry=True):
             topic.set_to_default()
-            self._topic_set.remove({"topic_name":topic_name})
+            self._topic_set.remove({"topic_name":topic_name,"topic_type":topic_type})
         self._logger.debug(f"Removed topic {topic_name}")
 
     def undo(self,transition:Transition):

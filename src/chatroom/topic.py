@@ -3,6 +3,7 @@ import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
 from chatroom.change import GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -109,6 +110,9 @@ class Topic(metaclass = abc.ABCMeta):
         old_value = self._value
         new_value = self._validate_change_and_get_result(change)
         self._value = new_value
+
+        Logger(DEBUG,'Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
+
         if notify_listeners:
             try:
                 self.notify_listeners(change,old_value=old_value,new_value=self._value)
