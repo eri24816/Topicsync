@@ -5,6 +5,7 @@ from websockets.server import serve as websockets_serve
 from chatroom import state_machine
 
 from chatroom.server.client_manager import ClientManager, Client
+from chatroom.service import Service
 from chatroom.state_machine import StateMachine, Transition
 from chatroom.topic import Topic, SetTopic
 from chatroom.logger import Logger, DEBUG
@@ -22,7 +23,7 @@ class ChatroomServer:
         def exists_topic(topic_name):
             return self._state_machine.has_topic(topic_name)
         self._client_manager = ClientManager(get_value,exists_topic)
-        self._services: Dict[str, Callable[..., Any]] = {}
+        self._services: Dict[str, Service] = {}
         self._state_machine = StateMachine(self._on_changes_made,on_transition_done)
 
         self._topic_set = self._state_machine.add_topic("_chatroom/topics",SetTopic)
@@ -73,18 +74,26 @@ class ChatroomServer:
         """
         Handle a request from a client
         """
-        response = self._services[service_name](**args)
+        service = self._services[service_name]
+        if service.pass_client_id:
+            args["sender"] = sender.id
+        response = service.callback(**args)
         sender.send("response", response=response, request_id=request_id)
 
     """
     API
     """
 
-    def register_service(self, service_name: str, service: Callable):
+    def register_service(self, service_name: str, callback: Callable, pass_sender=False):
         """
         Register a service
+
+        Args:
+            - service_name (str): The name of the service
+            - callback (Callable): The callback to call when the service is requested
+            - pass_sender (bool, optional): Whether to pass the sender's id to the callback. Defaults to False.
         """
-        self._services[service_name] = service
+        self._services[service_name] = Service(callback,pass_sender)
 
     T = TypeVar("T", bound=Topic)
     def get_topic(self, topic_name, type: type[T]) -> T:

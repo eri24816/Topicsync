@@ -42,7 +42,8 @@ class ClientManager:
         self._logger = logger.Logger(logger.DEBUG,"CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
-        self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._handle_subscribe}
+        self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._handle_subscribe,
+                                                                               'unsubscribe':self._handle_unsubscribe,}
         self._subscriptions:defaultdict[str,set] =defaultdict(set)
         self._sending_queue:asyncio.Queue[Tuple[Client,Tuple,Dict]] = asyncio.Queue()
 
