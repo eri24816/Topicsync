@@ -67,8 +67,6 @@ class ChatroomServer:
 
         except Exception as e:
             sender.send("reject",reason=repr(e))
-            # if not isinstance(e,InvalidChangeException):
-            #     raise
 
     def _handle_request(self, sender:Client, service_name, args, request_id):
         """
