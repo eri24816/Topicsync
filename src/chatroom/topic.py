@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
-from chatroom.change import GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from chatroom.change import EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
@@ -24,6 +24,8 @@ def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
         return FloatTopic(topic_name,state_machine)
     if type == 'set':
         return SetTopic(topic_name,state_machine)
+    if type == 'event':
+        return EventTopic(topic_name,state_machine)
     raise ValueError(f'Unknown topic type {type}')
 
 class Topic(metaclass = abc.ABCMeta):
@@ -154,7 +156,6 @@ class StringTopic(Topic):
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
         self.add_validator(type_validator(str))
-        self.on_set = Action()
     
     def set(self, value):
         change = StringChangeTypes.SetChange(self._name,value)
@@ -167,7 +168,6 @@ class IntTopic(Topic):
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
         self.add_validator(type_validator(int))
-        self.on_set = Action()
     
     def set(self, value:int):
         change = IntChangeTypes.SetChange(self._name,value)
@@ -202,7 +202,6 @@ class SetTopic(Topic):
     def __init__(self,name,state_machine:StateMachine):
         super().__init__(name,state_machine)
         self.add_validator(type_validator(list))
-        self.on_set = Action()
         self.on_append = Action()
         self.on_remove = Action()
     
@@ -239,3 +238,26 @@ class SetTopic(Topic):
                 self.on_remove(change.item)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
+ 
+class EventTopic(Topic):
+    '''
+    Event topic
+    '''
+    def __init__(self,name,state_machine:StateMachine):
+        super().__init__(name,state_machine)
+        self.on_emit = Action()
+    
+    def set(self, value):
+        raise NotImplementedError('You cannot set the value of an event topic.')
+
+    def emit(self):
+        change = EventChangeTypes.EmitChange(self._name)
+        self.apply_change_external(change)
+
+    def notify_listeners(self, change: Change, old_value, new_value):
+        '''
+        Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for event topics.
+        '''
+        match change:
+            case EventChangeTypes.EmitChange():
+                self.on_emit(**change.args)

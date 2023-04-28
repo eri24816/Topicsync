@@ -3,6 +3,9 @@ import traceback
 from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
+
+from numpy import isin
+from chatroom.change import EventChangeTypes, NullChange
 from chatroom.topic import Topic, topic_factory
 from chatroom.logger import Logger
 if TYPE_CHECKING:
@@ -75,11 +78,21 @@ class StateMachine:
         else:
             self._is_recording = False
             if len(self._current_transition) and emit_transition:
-                new_transition = Transition(self._current_transition,action_source)
-                self._on_transition_done(new_transition)
+                # discard NullChange and EmitChange
+                self._current_transition = [
+                    change for change in self._current_transition 
+                    if not isinstance(change,NullChange) and not isinstance(change,EventChangeTypes.EmitChange)]
+                if len(self._current_transition):
+                    new_transition = Transition(self._current_transition,action_source)
+                    self._on_transition_done(new_transition)
         finally:
             self._is_recording = False
-            self._on_changes_made(self._changes_made,action_id)
+            # discard NullChange and EmitChange
+            self._changes_made = [
+                change for change in self._changes_made
+                if not isinstance(change,NullChange) and not isinstance(change,EventChangeTypes.EmitChange)]
+            if len(self._changes_made):
+                self._on_changes_made(self._changes_made,action_id)
             self._changes_made = []
             self._current_transition = []
 

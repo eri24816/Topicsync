@@ -25,6 +25,7 @@ default_topic_value = {
     'bool':False,
     'set':[],
     'list':[],
+    'event':None
 }
 
 def remove_entry(dictionary,key):
@@ -61,7 +62,17 @@ class Change:
         '''
         Inverse() is defined after Apply called. It returns a change that will undo the change.
         '''
-        return Change(self.topic_name)
+        raise NotImplementedError()
+    
+class NullChange(Change):
+    def __init__(self,topic_name,id=None):
+        super().__init__(topic_name,id)
+    def apply(self, old_value):
+        return old_value
+    def inverse(self)->Change:
+        return self
+    def serialize(self):
+        raise NotImplementedError('NullChange should be discarded before serialization.')
 
 class SetChange(Change):
     def __init__(self,topic_name, value,old_value=None,id=None):
@@ -167,10 +178,24 @@ class SetChangeTypes:
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
+class EventChangeTypes:
+    class EmitChange(Change):
+        def __init__(self,topic_name,args={},id=None):
+            super().__init__(topic_name,id)
+            self.args = args
+        def apply(self,old_value:None):
+            return None
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"id":self.id}
+        def inverse(self)->Change:
+            return NullChange(self.topic_name)
+    types = {'emit':EmitChange}
+
 type_name_to_change_types = {
                                 'generic':GenericChangeTypes,
                                 'string':StringChangeTypes,
                                 'int':IntChangeTypes,
                                 'float':FloatChangeTypes,
-                                'set':SetChangeTypes
+                                'set':SetChangeTypes,
+                                'event':EventChangeTypes
                             }
