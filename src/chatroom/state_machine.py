@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
 
-from numpy import isin
 from chatroom.change import EventChangeTypes, NullChange
 from chatroom.topic import Topic, topic_factory
 from chatroom.logger import Logger

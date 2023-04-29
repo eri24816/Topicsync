@@ -94,7 +94,7 @@ class ChatroomServer:
         self._services[service_name] = Service(callback,pass_sender)
 
     T = TypeVar("T", bound=Topic)
-    def get_topic(self, topic_name, type: type[T]) -> T:
+    def topic(self, topic_name, type: type[T]) -> T:
         '''
         Get a existing topic
         '''
@@ -114,12 +114,12 @@ class ChatroomServer:
             raise Exception(f"Topic {topic_name} already exists")
         self._topic_set.append({"topic_name":topic_name,"topic_type":type.get_type_name()})
         self._logger.debug(f"Added topic {topic_name}")
-        return self.get_topic(topic_name,type)
+        return self.topic(topic_name,type)
         
     def remove_topic(self, topic_name):
         if not self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} does not exist")
-        topic = self.get_topic(topic_name,Topic)
+        topic = self.topic(topic_name,Topic)
         topic_type = topic.get_type_name()
         with self._state_machine.record(allow_reentry=True):
             topic.set_to_default()
