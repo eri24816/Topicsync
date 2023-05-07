@@ -1,6 +1,5 @@
 import threading
 from termcolor import colored
-from traitlets import default
 lock = threading.Lock()
 DEBUG = 1
 INFO = 2
