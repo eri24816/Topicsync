@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 import copy
 
 if TYPE_CHECKING:
@@ -177,6 +177,42 @@ class SetChangeTypes:
             return SetChangeTypes.AppendChange(self.topic_name,self.item)
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
+
+class TopicExistenceChangeTypes:
+    class AddChange(Change):
+        def __init__(self,topic_name,name,type,is_stateful,init_value,id=None):
+            super().__init__(topic_name,id)
+            self.name = name
+            self.type = type
+            self.is_stateful = is_stateful
+            self.init_value = init_value
+        def apply(self,old_value:List[str]):
+            if self.name in old_value:
+                raise InvalidChangeError(self,f'Topic {self.name} already exists.')
+            old_value.append(self.name)
+            return old_value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"add","name":self.name,"type":self.type,"is_stateful":self.is_stateful,"init_value":self.init_value,"id":self.id}
+        def inverse(self)->Change:
+            return TopicExistenceChangeTypes.RemoveChange(self.topic_name,self.name,self.type,self.is_stateful,self.init_value)
+    class RemoveChange(Change):
+        def __init__(self,topic_name,name,type,is_stateful,final_value,id=None):
+            super().__init__(topic_name,id)
+            self.name = name
+            self.type = type
+            self.is_stateful = is_stateful
+            self.final_value = final_value
+        def apply(self,old_value:List[str]):
+            if self.name not in old_value:
+                raise InvalidChangeError(self,f'Topic {self.name} does not exist.')
+            old_value.remove(self.name)
+            return old_value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"remove","name":self.name,"type":self.type,"is_stateful":self.is_stateful,"final_value":self.final_value,"id":self.id}
+        def inverse(self)->Change:
+            return TopicExistenceChangeTypes.AddChange(self.topic_name,self.name,self.type,self.is_stateful,self.final_value)
+    types = {'add':AddChange,'remove':RemoveChange}
+
 
 class EventChangeTypes:
     class EmitChange(Change):

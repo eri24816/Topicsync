@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager
 from typing import Any, Callable, List
 
-from numpy import isin
 from chatroom.change import EventChangeTypes, NullChange
 from chatroom.topic import Topic, topic_factory
 from chatroom.logger import Logger
@@ -29,13 +28,13 @@ class StateMachine:
         self._logger = Logger(0,"State")
     
     T = TypeVar('T', bound=Topic)
-    def add_topic(self,name:str,topic_type:type[T])->T:
-        topic = topic_type(name,self)
+    def add_topic(self,name:str,topic_type:type[T],is_stateful:bool = True,init_value:Any=None)->T:
+        topic = topic_type(name,self,is_stateful,init_value)
         self._state[name] = topic
         return topic
     
-    def add_topic_s(self,name:str,topic_type:str)->Topic:
-        topic = topic_factory(name,topic_type,self)
+    def add_topic_s(self,name:str,topic_type:str,is_stateful:bool = True,init_value:Any=None)->Topic:
+        topic = topic_factory(name,topic_type,is_stateful,self,init_value)
         self._state[name] = topic
         return topic
     

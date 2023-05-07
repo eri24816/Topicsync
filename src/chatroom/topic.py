@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
-from chatroom.change import EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from chatroom.change import EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, TopicExistenceChangeTypes, default_topic_value, type_validator
 from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
@@ -10,35 +10,28 @@ import abc
 if TYPE_CHECKING:
     from chatroom.state_machine import StateMachine
 
-def topic_factory(topic_name:str,type:str,state_machine:StateMachine) -> Topic:
+
+def topic_factory(topic_type,*args,**kwargs) -> Topic:
     '''
     Create a topic of the given type.
     '''
-    if type == 'generic':
-        return GenericTopic(topic_name,state_machine)
-    if type == 'string':
-        return StringTopic(topic_name,state_machine)
-    if type == 'int':
-        return IntTopic(topic_name,state_machine)
-    if type == 'float':
-        return FloatTopic(topic_name,state_machine)
-    if type == 'set':
-        return SetTopic(topic_name,state_machine)
-    if type == 'event':
-        return EventTopic(topic_name,state_machine)
-    raise ValueError(f'Unknown topic type {type}')
+    return all_topic_types[topic_type](*args,**kwargs)
 
 class Topic(metaclass = abc.ABCMeta):
     @classmethod
     def get_type_name(cls):
         return camel_to_snake(cls.__name__.replace('Topic',''))
     
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True):
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True,init_value=None):
         self._name = name
-        self._value = default_topic_value[self.get_type_name()]
         self._validators : List[Callable[[Any,Any,Change],bool]] = []
         self._state_machine = state_machine
         self._is_stateful = is_stateful
+
+        if init_value is not None:
+            self._value = init_value
+        else:
+            self._value = default_topic_value[self.get_type_name()]
 
         self.on_set = Action()
         """args:
@@ -142,8 +135,8 @@ class GenericTopic(Topic,Generic[T]):
     '''
     Topic of any/generic type (as long as it is JSON serializable)
     '''
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
     
     def set(self, value:T):
         change = GenericChangeTypes.SetChange(self._name,value)
@@ -153,8 +146,8 @@ class StringTopic(Topic):
     '''
     String topic
     '''
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(str))
     
     def set(self, value):
@@ -165,8 +158,8 @@ class IntTopic(Topic):
     '''
     Int topic
     '''
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(int))
     
     def set(self, value:int):
@@ -181,8 +174,9 @@ class FloatTopic(Topic):
     '''
     Int topic
     '''
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
+        
         self.add_validator(type_validator(float,int))
         self.on_set = Action()
     
@@ -195,12 +189,9 @@ class FloatTopic(Topic):
         self.apply_change_external(change)
 
 class SetTopic(Topic):
-    '''
-    Unordered list topic
-    '''
     
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(list))
         self.on_append = Action()
         self.on_remove = Action()
@@ -238,13 +229,58 @@ class SetTopic(Topic):
                 self.on_remove(change.item)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
+
+class TopicExistenceTopic(Topic):
+    '''
+    Topic existence topic
+    '''
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
+        self.on_add = Action()
+        """
+        args:
+        - name: the name of the new topic
+        - type: the type of the new topic
+        - is_stateful: whether the new topic is stateful
+        - init_value: the initial value of the new topic
+        """
+        self.on_remove = Action()
+        """
+        args:
+        - name: the name of the topic being removed
+        """
+        
+        self.topic_quality = {}
+    
+    def set(self, value):
+        raise NotImplementedError('You cannot set the value of a topic existence topic.')
+    
+    def add(self,name,type,is_stateful=True,init_value=None):
+        change = TopicExistenceChangeTypes.AddChange(self._name,name,type,is_stateful,init_value)
+        self.apply_change_external(change)
+        self.topic_quality[name] = {'type':type,'is_stateful':is_stateful}
+
+    def remove(self,name,final_value):
+        topic_quality = self.topic_quality.pop(name)
+        change = TopicExistenceChangeTypes.RemoveChange(self._name,name,topic_quality['type'],topic_quality['is_stateful'],final_value)
+        self.apply_change_external(change)
+
+    def notify_listeners(self,change:Change, old_value, new_value):
+        '''
+        Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for topic existence topics.
+        '''
+        match change:
+            case TopicExistenceChangeTypes.AddChange():
+                self.on_add(change.name,change.type,change.is_stateful,change.init_value)
+            case TopicExistenceChangeTypes.RemoveChange():
+                self.on_remove(change.name)
  
 class EventTopic(Topic):
     '''
     Event topic
     '''
-    def __init__(self,name,state_machine:StateMachine):
-        super().__init__(name,state_machine)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
         self.on_emit = Action()
     
     def set(self, value):
@@ -261,3 +297,13 @@ class EventTopic(Topic):
         match change:
             case EventChangeTypes.EmitChange():
                 self.on_emit(**change.args)
+
+all_topic_types = {
+    'generic': GenericTopic,
+    'string': StringTopic,
+    'int': IntTopic,
+    'float': FloatTopic,
+    'set': SetTopic,
+    'topic_existence': TopicExistenceTopic,
+    'event': EventTopic    
+}
