@@ -1,7 +1,6 @@
 import unittest
 from chatroom.state_machine import StateMachine
 from chatroom.topic import EventTopic, StringTopic
-from chatroom.change import InvalidChangeError
 
 # class StateMachineTransition(unittest.TestCase):
 #     def test_simple_transition(self):
