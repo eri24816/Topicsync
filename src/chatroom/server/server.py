@@ -7,7 +7,7 @@ from chatroom import state_machine
 from chatroom.server.client_manager import ClientManager, Client
 from chatroom.service import Service
 from chatroom.state_machine import StateMachine, Transition
-from chatroom.topic import EventTopic, Topic, SetTopic, TopicExistenceTopic
+from chatroom.topic import DictTopic, EventTopic, Topic, SetTopic
 from chatroom.logger import Logger, DEBUG
 from chatroom.change import Change
 
@@ -26,13 +26,12 @@ class ChatroomServer:
         self._services: Dict[str, Service] = {}
         self._state_machine = StateMachine(self._on_changes_made,on_transition_done)
 
-        self._topic_existence = self._state_machine.add_topic("_chatroom/topics",TopicExistenceTopic)
-        self._topic_existence.add('_chatroom/topics','string',init_value=['_chatroom/topics'])
-        self._topic_existence.on_add += lambda name, type, is_stateful, init_value:\
-            self._state_machine.add_topic_s(name,type,is_stateful,init_value)
-        self._topic_existence.on_remove += lambda name:\
-            self._state_machine.remove_topic(name)
-        
+        self._topic_list = self._state_machine.add_topic("_chatroom/topic_list",DictTopic,is_stateful=True,init_value=
+                                                         {'_chatroom/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
+                                                         )
+        self._topic_list.on_add += self._add_topic_raw
+        self._topic_list.on_remove += self._remove_topic_raw
+
     async def serve(self):
         '''
         Entry point for the server
@@ -51,6 +50,12 @@ class ChatroomServer:
 
     def _on_changes_made(self, changes:List[Change],actionID:str):
         self._client_manager.send_update(changes,actionID)
+
+    def _add_topic_raw(self,topic_name,props):
+        self._state_machine.add_topic_s(topic_name,props["type"],props["is_stateful"],props["boundary_value"])
+
+    def _remove_topic_raw(self,topic_name):
+        self._state_machine.remove_topic(topic_name)
 
     """
     Interface for clients
@@ -135,11 +140,10 @@ class ChatroomServer:
             raise Exception(f"Topic {topic_name} does not exist")
         
     T = TypeVar("T", bound=Topic)
-    def add_topic(self, topic_name, type: type[T]) -> T:
-        #TODO: Use dict for topic to imply topic_name check
+    def add_topic(self, topic_name, type: type[T],init_value=None) -> T:
         if self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} already exists")
-        self._topic_existence.append({"topic_name":topic_name,"topic_type":type.get_type_name()})
+        self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':True})
         self._logger.debug(f"Added topic {topic_name}")
         return self.topic(topic_name,type)
         
@@ -147,10 +151,11 @@ class ChatroomServer:
         if not self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} does not exist")
         topic = self.topic(topic_name,Topic)
-        topic_type = topic.get_type_name()
         with self._state_machine.record(allow_reentry=True):
-            topic.set_to_default()
-            self._topic_existence.remove({"topic_name":topic_name,"topic_type":topic_type})
+            temp = self._topic_list[topic_name]
+            temp['boundary_value'] = topic.get()
+            self._topic_list.change_value(topic_name,temp)
+            self._topic_list.remove(topic_name)
         self._logger.debug(f"Removed topic {topic_name}")
 
     def undo(self,transition:Transition):
