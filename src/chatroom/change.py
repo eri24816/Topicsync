@@ -178,41 +178,94 @@ class SetChangeTypes:
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
-class TopicExistenceChangeTypes:
-    class AddChange(Change):
-        def __init__(self,topic_name,name,type,is_stateful,init_value,id=None):
-            super().__init__(topic_name,id)
-            self.name = name
-            self.type = type
-            self.is_stateful = is_stateful
-            self.init_value = init_value
-        def apply(self,old_value:List[str]):
-            if self.name in old_value:
-                raise InvalidChangeError(self,f'Topic {self.name} already exists.')
-            old_value.append(self.name)
-            return old_value
-        def serialize(self):
-            return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"add","name":self.name,"type":self.type,"is_stateful":self.is_stateful,"init_value":self.init_value,"id":self.id}
-        def inverse(self)->Change:
-            return TopicExistenceChangeTypes.RemoveChange(self.topic_name,self.name,self.type,self.is_stateful,self.init_value)
-    class RemoveChange(Change):
-        def __init__(self,topic_name,name,type,is_stateful,final_value,id=None):
-            super().__init__(topic_name,id)
-            self.name = name
-            self.type = type
-            self.is_stateful = is_stateful
-            self.final_value = final_value
-        def apply(self,old_value:List[str]):
-            if self.name not in old_value:
-                raise InvalidChangeError(self,f'Topic {self.name} does not exist.')
-            old_value.remove(self.name)
-            return old_value
-        def serialize(self):
-            return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"remove","name":self.name,"type":self.type,"is_stateful":self.is_stateful,"final_value":self.final_value,"id":self.id}
-        def inverse(self)->Change:
-            return TopicExistenceChangeTypes.AddChange(self.topic_name,self.name,self.type,self.is_stateful,self.final_value)
-    types = {'add':AddChange,'remove':RemoveChange}
+# class TopicExistenceChangeTypes:
+#     class AddChange(Change):
+#         def __init__(self,topic_name,target_name,target_type,is_stateful,init_value,id=None):
+#             super().__init__(topic_name,id)
+#             self.target_name = target_name
+#             self.target_type = target_type
+#             self.is_stateful = is_stateful
+#             self.init_value = init_value
+#         def apply(self,old_value:List[str]):
+#             if self.target_name in old_value:
+#                 raise InvalidChangeError(self,f'Topic {self.target_name} already exists.')
+#             old_value.append(self.target_name)
+#             return old_value
+#         def serialize(self):
+#             return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"add","target_name":self.target_name,"target_type":self.target_type,"is_stateful":self.is_stateful,"init_value":self.init_value,"id":self.id}
+#         def inverse(self)->Change:
+#             return TopicExistenceChangeTypes.RemoveChange(self.topic_name,self.target_name,self.target_type,self.is_stateful,self.init_value,None)
+#     class RemoveChange(Change):
+#         def __init__(self,topic_name,target_name,target_type,is_stateful,final_value,state_machine:StateMachine|None,id=None):
+#             super().__init__(topic_name,id)
+#             self.target_name = target_name
+#             self.target_type = target_type
+#             self.is_stateful = is_stateful
+#             self.final_value = final_value
+#         def apply(self,old_value:List[str]):
+#             if self.target_name not in old_value:
+#                 raise InvalidChangeError(self,f'Topic {self.target_name} does not exist.')
+#             target = 
+#             old_value.remove(self.target_name)
+#             return old_value
+#         def serialize(self):
+#             return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"remove","target_name":self.target_name,"target_type":self.target_type,"is_stateful":self.is_stateful,"final_value":self.final_value,"id":self.id}
+#         def inverse(self)->Change:
+#             return TopicExistenceChangeTypes.AddChange(self.topic_name,self.target_name,self.target_type,self.is_stateful,self.final_value)
+#     types = {'add':AddChange,'remove':RemoveChange}
 
+class DictChangeTypes:
+    class SetChange(SetChange):
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"dict","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+    class AddChange(Change):
+        def __init__(self,topic_name, key,value,id=None):
+            super().__init__(topic_name,id)
+            self.key = key
+            self.value = value
+        def apply(self, old_dict):
+            if self.key in old_dict:
+                raise InvalidChangeError(self,f'Adding {self.key} to {old_dict} would create a duplicate.')
+            old_dict[self.key] = self.value
+            return old_dict
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"dict","type":"add","key":self.key,"value":self.value,"id":self.id}
+        def inverse(self)->Change:
+            return DictChangeTypes.RemoveChange(self.topic_name,self.key)
+    class RemoveChange(Change):
+        def __init__(self,topic_name, key,id=None):
+            super().__init__(topic_name,id)
+            self.key = key
+            self.value = None
+        def apply(self, old_dict):
+            if self.key not in old_dict:
+                raise InvalidChangeError(self,f'{self.key} is not in {old_dict}')
+            self.value = old_dict.pop(self.key)
+            return old_dict
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"dict","type":"remove","key":self.key,"id":self.id}
+        def inverse(self)->Change:
+            return DictChangeTypes.AddChange(self.topic_name,self.key,self.value)
+    class ChangeValueChange(Change):
+        def __init__(self,topic_name, key,value,old_value=None,id=None):
+            super().__init__(topic_name,id)
+            self.key = key
+            self.value = value
+            self.old_value = old_value
+        def apply(self, old_dict):
+            if self.key not in old_dict:
+                raise InvalidChangeError(self,f'{self.key} is not in {old_dict}')
+            if self.old_value != old_dict[self.key]:
+                # regenerate id
+                self.id = uuid.uuid4()
+            self.old_value = old_dict[self.key]
+            old_dict[self.key] = self.value
+            return old_dict
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"dict","type":"change_value","key":self.key,"value":self.value,"old_value":self.old_value,"id":self.id}
+        def inverse(self)->Change:
+            return DictChangeTypes.ChangeValueChange(self.topic_name,self.key,self.old_value,self.value)
+    types = {'set':SetChange,'add':AddChange,'remove':RemoveChange}
 
 class EventChangeTypes:
     class EmitChange(Change):
@@ -233,5 +286,6 @@ type_name_to_change_types = {
                                 'int':IntChangeTypes,
                                 'float':FloatChangeTypes,
                                 'set':SetChangeTypes,
+                                'dict':DictChangeTypes,
                                 'event':EventChangeTypes
                             }

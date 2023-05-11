@@ -36,9 +36,8 @@ i = server.add_topic("i",IntTopic)
 f = server.add_topic("f",FloatTopic)
 
 g1 = server.add_topic("g1",GenericTopic[float])
-g2 = server.add_topic("g2",GenericTopic[dict[str,list]])
+g2 = server.add_topic("g2",GenericTopic[dict[str,list]],init_value={'a':[1,2,3]})
 g1.set(1.0)
-g2.set({'a':[1,2,3]})
 
 
 asyncio.run(server.serve())

@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
-from chatroom.change import EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, TopicExistenceChangeTypes, default_topic_value, type_validator
+from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
@@ -10,17 +10,16 @@ import abc
 if TYPE_CHECKING:
     from chatroom.state_machine import StateMachine
 
-
-def topic_factory(topic_type,*args,**kwargs) -> Topic:
+def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None) -> Topic:
     '''
     Create a topic of the given type.
     '''
-    return all_topic_types[topic_type](*args,**kwargs)
+    return all_topic_types[topic_type](name,state_machine,is_stateful,init_value)
 
 class Topic(metaclass = abc.ABCMeta):
     @classmethod
     def get_type_name(cls):
-        return camel_to_snake(cls.__name__.replace('Topic',''))
+        return camel_to_snake(cls.__name__[:-5])
     
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True,init_value=None):
         self._name = name
@@ -230,50 +229,104 @@ class SetTopic(Topic):
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
-class TopicExistenceTopic(Topic):
-    '''
-    Topic existence topic
-    '''
+# class TopicExistenceTopic(Topic):
+#     '''
+#     Topic existence topic
+#     '''
+#     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+#         super().__init__(name,state_machine,is_stateful,init_value)
+#         self.on_add = Action()
+#         """
+#         args:
+#         - name: the name of the new topic
+#         - type: the type of the new topic
+#         - is_stateful: whether the new topic is stateful
+#         - init_value: the initial value of the new topic
+#         """
+#         self.on_remove = Action()
+#         """
+#         args:
+#         - name: the name of the topic being removed
+#         """
+        
+#         self.topic_quality = {}
+    
+#     def set(self, value):
+#         raise NotImplementedError('You cannot set the value of a topic existence topic.')
+    
+#     def add(self,name,type,is_stateful=True,init_value=None):
+#         change = TopicExistenceChangeTypes.AddChange(self._name,name,type,is_stateful,init_value)
+#         self.apply_change_external(change)
+#         self.topic_quality[name] = {'type':type,'is_stateful':is_stateful}
+
+#     def remove(self,name,final_value):
+#         topic_quality = self.topic_quality.pop(name)
+#         change = TopicExistenceChangeTypes.RemoveChange(self._name,name,topic_quality['type'],topic_quality['is_stateful'],final_value)
+#         self.apply_change_external(change)
+
+#     def notify_listeners(self,change:Change, old_value, new_value):
+#         '''
+#         Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for topic existence topics.
+#         '''
+#         match change:
+#             case TopicExistenceChangeTypes.AddChange():
+#                 self.on_add(change.new_topic_name,change.new_topic_type,change.is_stateful,change.init_value)
+#             case TopicExistenceChangeTypes.RemoveChange():
+#                 self.on_remove(change.new_topic_name)
+
+class DictTopic(Topic):
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
+        self.add_validator(type_validator(dict))
+        self.on_set = Action()
+        self.on_set2 = Action()
         self.on_add = Action()
-        """
-        args:
-        - name: the name of the new topic
-        - type: the type of the new topic
-        - is_stateful: whether the new topic is stateful
-        - init_value: the initial value of the new topic
-        """
         self.on_remove = Action()
-        """
-        args:
-        - name: the name of the topic being removed
-        """
-        
-        self.topic_quality = {}
+        self.on_change_value = Action()
     
     def set(self, value):
-        raise NotImplementedError('You cannot set the value of a topic existence topic.')
-    
-    def add(self,name,type,is_stateful=True,init_value=None):
-        change = TopicExistenceChangeTypes.AddChange(self._name,name,type,is_stateful,init_value)
-        self.apply_change_external(change)
-        self.topic_quality[name] = {'type':type,'is_stateful':is_stateful}
-
-    def remove(self,name,final_value):
-        topic_quality = self.topic_quality.pop(name)
-        change = TopicExistenceChangeTypes.RemoveChange(self._name,name,topic_quality['type'],topic_quality['is_stateful'],final_value)
+        change = DictChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
-    def notify_listeners(self,change:Change, old_value, new_value):
-        '''
-        Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for topic existence topics.
-        '''
+    def add(self, key, value):
+        change = DictChangeTypes.AddChange(self._name,key,value)
+        self.apply_change_external(change)
+
+    def remove(self, key):
+        change = DictChangeTypes.RemoveChange(self._name,key)
+        self.apply_change_external(change)
+
+    def change_value(self, key, value):
+        change = DictChangeTypes.ChangeValueChange(self._name,key,value)
+        self.apply_change_external(change)
+
+    def __getitem__(self, key):
+        return self._value[key]
+
+    def notify_listeners(self,change:Change, old_value:dict, new_value:dict):
+        super().notify_listeners(change,old_value,new_value)
         match change:
-            case TopicExistenceChangeTypes.AddChange():
-                self.on_add(change.name,change.type,change.is_stateful,change.init_value)
-            case TopicExistenceChangeTypes.RemoveChange():
-                self.on_remove(change.name)
+            case DictChangeTypes.SetChange():
+                old_keys = set(old_value.keys())
+                new_keys = set(new_value.keys())
+                removed_keys = old_keys - new_keys
+                added_keys = new_keys - old_keys
+                remained_keys = old_keys & new_keys
+                for key in removed_keys:
+                    self.on_remove(key)
+                for key in added_keys:
+                    self.on_add(key,new_value[key])
+                for key in remained_keys:
+                    if old_value[key] != new_value[key]:
+                        self.on_change_value(key,new_value[key])
+            case DictChangeTypes.AddChange():
+                self.on_add(change.key,change.value)
+            case DictChangeTypes.RemoveChange():
+                self.on_remove(change.key)
+            case DictChangeTypes.ChangeValueChange():
+                self.on_change_value(change.key,change.value)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
  
 class EventTopic(Topic):
     '''
@@ -304,6 +357,6 @@ all_topic_types = {
     'int': IntTopic,
     'float': FloatTopic,
     'set': SetTopic,
-    'topic_existence': TopicExistenceTopic,
+    'dict': DictTopic,
     'event': EventTopic    
 }

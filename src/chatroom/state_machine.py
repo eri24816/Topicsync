@@ -34,7 +34,7 @@ class StateMachine:
         return topic
     
     def add_topic_s(self,name:str,topic_type:str,is_stateful:bool = True,init_value:Any=None)->Topic:
-        topic = topic_factory(name,topic_type,is_stateful,self,init_value)
+        topic = topic_factory(topic_type,name,self,is_stateful,init_value)
         self._state[name] = topic
         return topic
     

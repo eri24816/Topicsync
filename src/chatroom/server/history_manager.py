@@ -19,7 +19,7 @@ class HistoryManager:
         self._history.append(transition)
         
     def undo(self):
-        if len(self._history) > 0:
+        if len(self._history) > 0 and self._current_ptr >= 0:
             self._chatroom.undo(self._history[self._current_ptr])
             self._current_ptr -= 1
 
