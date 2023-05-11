@@ -229,51 +229,6 @@ class SetTopic(Topic):
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
-# class TopicExistenceTopic(Topic):
-#     '''
-#     Topic existence topic
-#     '''
-#     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-#         super().__init__(name,state_machine,is_stateful,init_value)
-#         self.on_add = Action()
-#         """
-#         args:
-#         - name: the name of the new topic
-#         - type: the type of the new topic
-#         - is_stateful: whether the new topic is stateful
-#         - init_value: the initial value of the new topic
-#         """
-#         self.on_remove = Action()
-#         """
-#         args:
-#         - name: the name of the topic being removed
-#         """
-        
-#         self.topic_quality = {}
-    
-#     def set(self, value):
-#         raise NotImplementedError('You cannot set the value of a topic existence topic.')
-    
-#     def add(self,name,type,is_stateful=True,init_value=None):
-#         change = TopicExistenceChangeTypes.AddChange(self._name,name,type,is_stateful,init_value)
-#         self.apply_change_external(change)
-#         self.topic_quality[name] = {'type':type,'is_stateful':is_stateful}
-
-#     def remove(self,name,final_value):
-#         topic_quality = self.topic_quality.pop(name)
-#         change = TopicExistenceChangeTypes.RemoveChange(self._name,name,topic_quality['type'],topic_quality['is_stateful'],final_value)
-#         self.apply_change_external(change)
-
-#     def notify_listeners(self,change:Change, old_value, new_value):
-#         '''
-#         Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for topic existence topics.
-#         '''
-#         match change:
-#             case TopicExistenceChangeTypes.AddChange():
-#                 self.on_add(change.new_topic_name,change.new_topic_type,change.is_stateful,change.init_value)
-#             case TopicExistenceChangeTypes.RemoveChange():
-#                 self.on_remove(change.new_topic_name)
-
 class DictTopic(Topic):
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
@@ -335,6 +290,7 @@ class EventTopic(Topic):
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
         self.on_emit = Action()
+        self.on_reverse = Action()
     
     def set(self, value):
         raise NotImplementedError('You cannot set the value of an event topic.')
@@ -349,8 +305,13 @@ class EventTopic(Topic):
         '''
         match change:
             case EventChangeTypes.EmitChange():
-                self.on_emit(**change.args)
-
+                forward_info = self.on_emit(**change.args)[0]
+                if forward_info is None:
+                    forward_info = {}
+                change.forward_info = forward_info
+            case EventChangeTypes.ReversedEmitChange():
+                self.on_reverse(**change.args, **change.forward_info)
+        
 all_topic_types = {
     'generic': GenericTopic,
     'string': StringTopic,

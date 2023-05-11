@@ -1,7 +1,7 @@
 from __future__ import annotations
 import traceback
 from typing import TYPE_CHECKING, TypeVar
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any, Callable, List
 
 from chatroom.change import EventChangeTypes, NullChange
@@ -25,6 +25,7 @@ class StateMachine:
         self._on_transition_done = on_transition_done
         self._max_recursive_depth = 1e4
         self._apply_change_call_stack = []
+        self._inside_emit_change = False
         self._logger = Logger(0,"State")
     
     T = TypeVar('T', bound=Topic)
@@ -77,19 +78,15 @@ class StateMachine:
         else:
             self._is_recording = False
             if len(self._current_transition) and emit_transition:
-                # discard NullChange and EmitChange
-                self._current_transition = [
-                    change for change in self._current_transition 
-                    if not isinstance(change,NullChange) and not isinstance(change,EventChangeTypes.EmitChange)]
                 if len(self._current_transition):
                     new_transition = Transition(self._current_transition,action_source)
                     self._on_transition_done(new_transition)
         finally:
             self._is_recording = False
-            # discard NullChange and EmitChange
+            # discard NullChange, EmitChange, ReversedEmitChange
             self._changes_made = [
                 change for change in self._changes_made
-                if not isinstance(change,NullChange) and not isinstance(change,EventChangeTypes.EmitChange)]
+                if not isinstance(change,NullChange) and not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
             if len(self._changes_made):
                 self._on_changes_made(self._changes_made,action_id)
             self._changes_made = []
@@ -114,12 +111,23 @@ class StateMachine:
         finally:
             self._apply_change_call_stack.pop()
 
+    @contextmanager
+    def enter_emit_change(self):
+        if self._inside_emit_change:
+            yield
+            return
+        self._inside_emit_change = True
+        try:
+            yield
+        finally:
+            self._inside_emit_change = False
+
     def apply_change(self,change:Change):
         
         topic = self.get_topic(change.topic_name)
 
         # Within self._block_recursion context, recursive depth for stateful topics is limited
-        if topic.is_stateful() and len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
+        if topic.is_stateful() and (not self._inside_emit_change) and len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
             return
         
         # Enter record context if not already in it
@@ -134,15 +142,18 @@ class StateMachine:
         
         # Apply the change
         
-        if topic.is_stateful():
+        if topic.is_stateful() and not self._inside_emit_change:
             self._current_transition.append(change)
         self._changes_made.append(change)
 
         try:
             with self._track_apply_change(change.topic_name):
-                topic.apply_change(change)
+                with self.enter_emit_change() if isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange)) else nullcontext():
+                    topic.apply_change(change)
         except:
             # Undo the subtree of changes which was caused in consequence of this change
+            if self._inside_emit_change:
+                raise RuntimeError("An error has occured inside an event change. Please avoid that. The state is now in an inconsistent state. The error was: \n" + str(traceback.format_exc()))
             if topic.is_stateful():
                 self._undo_subtree(change)
             raise

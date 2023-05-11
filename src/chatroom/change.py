@@ -272,13 +272,25 @@ class EventChangeTypes:
         def __init__(self,topic_name,args={},id=None):
             super().__init__(topic_name,id)
             self.args = args
+            self.forward_info = {}
         def apply(self,old_value:None):
             return None
         def serialize(self):
-            return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"id":self.id}
+            return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
         def inverse(self)->Change:
-            return NullChange(self.topic_name)
-    types = {'emit':EmitChange}
+            return EventChangeTypes.ReversedEmitChange(self.topic_name,self.args,self.forward_info)
+    class ReversedEmitChange(Change):
+            def __init__(self,topic_name,args={},forward_info={},id=None):
+                super().__init__(topic_name,id)
+                self.args = args
+                self.forward_info = forward_info
+            def apply(self,old_value:None):
+                return None
+            def serialize(self):
+                return {"topic_name":self.topic_name,"topic_type":"event","type":"reversed_emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
+            def inverse(self)->Change:
+                return EventChangeTypes.EmitChange(self.topic_name,self.args)
+    types = {'emit':EmitChange,'reversed_emit':ReversedEmitChange}
 
 type_name_to_change_types = {
                                 'generic':GenericChangeTypes,

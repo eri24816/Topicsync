@@ -53,8 +53,10 @@ class Action:
     
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         '''Call each callback in the action with the given arguments.'''
+        returns = []
         for callback in self._callbacks:
-            callback(*args,**kwargs)
+            returns.append(callback(*args,**kwargs))
+        return returns
 
 import weakref
 _KT = typing.TypeVar("_KT") #  key type
