@@ -25,6 +25,7 @@ default_topic_value = {
     'bool':False,
     'set':[],
     'list':[],
+    'dict':{},
     'event':None
 }
 
@@ -257,7 +258,7 @@ class DictChangeTypes:
                 raise InvalidChangeError(self,f'{self.key} is not in {old_dict}')
             if self.old_value != old_dict[self.key]:
                 # regenerate id
-                self.id = uuid.uuid4()
+                self.id = str(uuid.uuid4())
             self.old_value = old_dict[self.key]
             old_dict[self.key] = self.value
             return old_dict
@@ -265,7 +266,7 @@ class DictChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"dict","type":"change_value","key":self.key,"value":self.value,"old_value":self.old_value,"id":self.id}
         def inverse(self)->Change:
             return DictChangeTypes.ChangeValueChange(self.topic_name,self.key,self.old_value,self.value)
-    types = {'set':SetChange,'add':AddChange,'remove':RemoveChange}
+    types = {'set':SetChange,'add':AddChange,'remove':RemoveChange,'change_value':ChangeValueChange}
 
 class EventChangeTypes:
     class EmitChange(Change):

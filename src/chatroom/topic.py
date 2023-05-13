@@ -30,7 +30,7 @@ class Topic(metaclass = abc.ABCMeta):
         if init_value is not None:
             self._value = init_value
         else:
-            self._value = default_topic_value[self.get_type_name()]
+            self._value = copy.deepcopy(default_topic_value[self.get_type_name()])
 
         self.on_set = Action()
         """args:
@@ -82,7 +82,7 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Set the topic to its default value.
         '''
-        self.set(default_topic_value[self.get_type_name()])
+        self.set(copy.deepcopy(default_topic_value[self.get_type_name()]))
 
     @abc.abstractmethod
     def set(self, value):

@@ -96,7 +96,7 @@ class ChatroomServer:
         """
         self._services[service_name] = Service(callback,pass_sender)
 
-    def on(self, event_name: str, callback: Callable):
+    def on(self, event_name: str, callback: Callable, inverse_callback: Callable):
         """
         Register a callback for a event.
         The event can be triggered by the client or the server.
@@ -110,6 +110,7 @@ class ChatroomServer:
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
         topic.on_emit += callback
+        topic.on_reverse += inverse_callback
 
     def emit(self, event_name: str, **args):
         """
@@ -145,7 +146,8 @@ class ChatroomServer:
             raise Exception(f"Topic {topic_name} already exists")
         self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':True})
         self._logger.debug(f"Added topic {topic_name}")
-        return self.topic(topic_name,type)
+        new_topic = self.topic(topic_name,type)
+        return new_topic
         
     def remove_topic(self, topic_name):
         if not self._state_machine.has_topic(topic_name):

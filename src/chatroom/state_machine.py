@@ -86,7 +86,7 @@ class StateMachine:
             # discard NullChange, EmitChange, ReversedEmitChange
             self._changes_made = [
                 change for change in self._changes_made
-                if not isinstance(change,NullChange) and not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
+                if not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
             if len(self._changes_made):
                 self._on_changes_made(self._changes_made,action_id)
             self._changes_made = []
