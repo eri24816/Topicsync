@@ -39,7 +39,7 @@ class ClientManager:
     def __init__(self,get_topic_value,exists_topic) -> None:
         self._get_topic_value = get_topic_value
         self._exists_topic = exists_topic
-        self._logger = logger.Logger(logger.DEBUG,"CM")
+        self._logger = logger.Logger("CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
         self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._handle_subscribe,

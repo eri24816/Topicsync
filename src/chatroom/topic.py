@@ -105,7 +105,7 @@ class Topic(metaclass = abc.ABCMeta):
         new_value = self._validate_change_and_get_result(change)
         self._value = new_value
 
-        Logger(DEBUG,'Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
+        Logger('Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
 
         if notify_listeners:
             try:
@@ -138,6 +138,8 @@ class GenericTopic(Topic,Generic[T]):
         super().__init__(name,state_machine,is_stateful,init_value)
     
     def set(self, value:T):
+        if value == self._value:
+            return
         change = GenericChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
@@ -150,6 +152,8 @@ class StringTopic(Topic):
         self.add_validator(type_validator(str))
     
     def set(self, value):
+        if value == self._value:
+            return
         change = StringChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
         
@@ -162,6 +166,8 @@ class IntTopic(Topic):
         self.add_validator(type_validator(int))
     
     def set(self, value:int):
+        if value == self._value:
+            return
         change = IntChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
@@ -180,6 +186,8 @@ class FloatTopic(Topic):
         self.on_set = Action()
     
     def set(self, value:float):
+        if value == self._value:
+            return
         change = FloatChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
@@ -196,6 +204,8 @@ class SetTopic(Topic):
         self.on_remove = Action()
     
     def set(self, value):
+        if value == self._value:
+            return
         change = SetChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
@@ -240,6 +250,8 @@ class DictTopic(Topic):
         self.on_change_value = Action()
     
     def set(self, value):
+        if value == self._value:
+            return
         change = DictChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
@@ -283,6 +295,15 @@ class DictTopic(Topic):
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
  
+def merge_dicts(*dicts:List[dict]):
+    '''
+    The order of the dicts is important. The last dict will override the previous ones.
+    '''
+    result = {}
+    for d in dicts:
+        result.update(d)
+    return result
+
 class EventTopic(Topic):
     '''
     Event topic
@@ -295,8 +316,8 @@ class EventTopic(Topic):
     def set(self, value):
         raise NotImplementedError('You cannot set the value of an event topic.')
 
-    def emit(self):
-        change = EventChangeTypes.EmitChange(self._name)
+    def emit(self,args={}):
+        change = EventChangeTypes.EmitChange(self._name,args)
         self.apply_change_external(change)
 
     def notify_listeners(self, change: Change, old_value, new_value):
@@ -305,12 +326,14 @@ class EventTopic(Topic):
         '''
         match change:
             case EventChangeTypes.EmitChange():
-                forward_info = self.on_emit(**change.args)[0]
+                args = merge_dicts(change.args,change.forward_info)
+                forward_info = self.on_emit(**args)[0]
                 if forward_info is None:
                     forward_info = {}
                 change.forward_info = forward_info
             case EventChangeTypes.ReversedEmitChange():
-                self.on_reverse(**change.args, **change.forward_info)
+                args = merge_dicts(change.args,change.forward_info)
+                self.on_reverse(**args)
         
 all_topic_types = {
     'generic': GenericTopic,

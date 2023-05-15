@@ -26,7 +26,7 @@ class StateMachine:
         self._max_recursive_depth = 1e4
         self._apply_change_call_stack = []
         self._inside_emit_change = False
-        self._logger = Logger(0,"State")
+        self._logger = Logger("State")
     
     T = TypeVar('T', bound=Topic)
     def add_topic(self,name:str,topic_type:type[T],is_stateful:bool = True,init_value:Any=None)->T:
@@ -86,7 +86,7 @@ class StateMachine:
             # discard NullChange, EmitChange, ReversedEmitChange
             self._changes_made = [
                 change for change in self._changes_made
-                if not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
+                if not isinstance(change,NullChange) and not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
             if len(self._changes_made):
                 self._on_changes_made(self._changes_made,action_id)
             self._changes_made = []
@@ -114,7 +114,7 @@ class StateMachine:
     @contextmanager
     def enter_emit_change(self):
         if self._inside_emit_change:
-            yield
+            yield 
             return
         self._inside_emit_change = True
         try:

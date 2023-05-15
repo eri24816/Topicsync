@@ -16,7 +16,7 @@ class ChatroomServer:
     def __init__(self, port: int, host:str='localhost',on_transition_done=lambda transition:None) -> None:
         self._port = port
         self._host = host
-        self._logger = Logger(DEBUG, "Server")
+        self._logger = Logger("Server")
         def get_value(topic_name):
             topic = self._state_machine.get_topic(topic_name)
             return topic.get()
@@ -31,6 +31,8 @@ class ChatroomServer:
                                                          )
         self._topic_list.on_add += self._add_topic_raw
         self._topic_list.on_remove += self._remove_topic_raw
+
+        self.record = self._state_machine.record
 
     async def serve(self):
         '''
@@ -96,7 +98,7 @@ class ChatroomServer:
         """
         self._services[service_name] = Service(callback,pass_sender)
 
-    def on(self, event_name: str, callback: Callable, inverse_callback: Callable):
+    def on(self, event_name: str, callback: Callable, inverse_callback: Callable = None, is_stateful: bool = True):
         """
         Register a callback for a event.
         The event can be triggered by the client or the server.
@@ -105,12 +107,15 @@ class ChatroomServer:
             - event_name (str): The name of the event
             - callback (Callable): The callback to call when the event is triggered
         """
+        if is_stateful and inverse_callback is None:
+            raise ValueError("inverse_callback must be provided if is_stateful is True")
         if not self._state_machine.has_topic(event_name):
-            self._state_machine.add_topic(event_name,EventTopic)
+            self._state_machine.add_topic(event_name,EventTopic,is_stateful=is_stateful)
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
         topic.on_emit += callback
-        topic.on_reverse += inverse_callback
+        if is_stateful:
+            topic.on_reverse += inverse_callback
 
     def emit(self, event_name: str, **args):
         """
@@ -124,7 +129,7 @@ class ChatroomServer:
             self._state_machine.add_topic(event_name,EventTopic)
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
-        topic.emit(**args)
+        topic.emit(args)
 
     T = TypeVar("T", bound=Topic)
     def topic(self, topic_name, type: type[T]) -> T:
