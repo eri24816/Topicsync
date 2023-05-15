@@ -26,7 +26,7 @@ class Test(unittest.TestCase):
         b=machine.add_topic('b',StringTopic,init_value=' world')
         e=machine.add_topic('e',EventTopic)
 
-        def on_emit():
+        def on_emit(**kwargs):
             old = a.get()
             a.set('hello')
             return {'old':old} # This information is useful for reverse

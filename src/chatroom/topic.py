@@ -295,7 +295,7 @@ class DictTopic(Topic):
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
  
-def merge_dicts(*dicts:List[dict]):
+def merge_dicts(*dicts:dict):
     '''
     The order of the dicts is important. The last dict will override the previous ones.
     '''
