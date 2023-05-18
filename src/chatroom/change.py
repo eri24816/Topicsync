@@ -179,41 +179,39 @@ class SetChangeTypes:
     
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
-# class TopicExistenceChangeTypes:
-#     class AddChange(Change):
-#         def __init__(self,topic_name,target_name,target_type,is_stateful,init_value,id=None):
-#             super().__init__(topic_name,id)
-#             self.target_name = target_name
-#             self.target_type = target_type
-#             self.is_stateful = is_stateful
-#             self.init_value = init_value
-#         def apply(self,old_value:List[str]):
-#             if self.target_name in old_value:
-#                 raise InvalidChangeError(self,f'Topic {self.target_name} already exists.')
-#             old_value.append(self.target_name)
-#             return old_value
-#         def serialize(self):
-#             return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"add","target_name":self.target_name,"target_type":self.target_type,"is_stateful":self.is_stateful,"init_value":self.init_value,"id":self.id}
-#         def inverse(self)->Change:
-#             return TopicExistenceChangeTypes.RemoveChange(self.topic_name,self.target_name,self.target_type,self.is_stateful,self.init_value,None)
-#     class RemoveChange(Change):
-#         def __init__(self,topic_name,target_name,target_type,is_stateful,final_value,state_machine:StateMachine|None,id=None):
-#             super().__init__(topic_name,id)
-#             self.target_name = target_name
-#             self.target_type = target_type
-#             self.is_stateful = is_stateful
-#             self.final_value = final_value
-#         def apply(self,old_value:List[str]):
-#             if self.target_name not in old_value:
-#                 raise InvalidChangeError(self,f'Topic {self.target_name} does not exist.')
-#             target = 
-#             old_value.remove(self.target_name)
-#             return old_value
-#         def serialize(self):
-#             return {"topic_name":self.topic_name,"topic_type":"topic_existence","type":"remove","target_name":self.target_name,"target_type":self.target_type,"is_stateful":self.is_stateful,"final_value":self.final_value,"id":self.id}
-#         def inverse(self)->Change:
-#             return TopicExistenceChangeTypes.AddChange(self.topic_name,self.target_name,self.target_type,self.is_stateful,self.final_value)
-#     types = {'add':AddChange,'remove':RemoveChange}
+class ListChangeTypes:
+    class SetChange(SetChange):
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"list","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+
+    class InsertChange(Change):
+        def __init__(self,topic_name, item,position,id=None):
+            super().__init__(topic_name,id)
+            self.item = item
+            self.position = position
+        def apply(self, old_value:list):
+            if self.position < 0:
+                self.position = len(old_value) + self.position
+            old_value.insert(self.position,self.item)
+            return old_value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
+        def inverse(self)->Change:
+            return ListChangeTypes.PopChange(self.topic_name,self.item)
+        
+    class PopChange(Change):
+        def __init__(self,topic_name, position,id=None):
+            super().__init__(topic_name,id)
+            self.position = position
+        def apply(self, old_value:list):
+            if self.position < 0:
+                self.position = len(old_value) + self.position
+            self.item = old_value.pop(self.position)
+            return old_value
+        def serialize(self):
+            return {"topic_name":self.topic_name,"topic_type":"list","type":"pop","position":self.position,"id":self.id}
+        def inverse(self)->Change:
+            return ListChangeTypes.InsertChange(self.topic_name,self.item,self.position)
 
 class DictChangeTypes:
     class SetChange(SetChange):
@@ -300,5 +298,6 @@ type_name_to_change_types = {
                                 'float':FloatChangeTypes,
                                 'set':SetChangeTypes,
                                 'dict':DictChangeTypes,
-                                'event':EventChangeTypes
+                                'list':ListChangeTypes,
+                                'event':EventChangeTypes,
                             }

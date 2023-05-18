@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import json
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
-from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
@@ -238,6 +238,61 @@ class SetTopic(Topic):
                 self.on_remove(change.item)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
+            
+class ListTopic(Topic):
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
+        super().__init__(name,state_machine,is_stateful,init_value)
+        self.add_validator(type_validator(list))
+        self.on_insert = Action()
+        self.on_pop = Action()
+    
+    def set(self, value):
+        if value == self._value:
+            return
+        change = ListChangeTypes.SetChange(self._name,value)
+        self.apply_change_external(change)
+    
+    def insert(self, item, position:int=-1):
+        change = ListChangeTypes.InsertChange(self._name,item,position)
+        self.apply_change_external(change)
+    
+    def pop(self, position:int=-1):
+        change = ListChangeTypes.PopChange(self._name,position)
+        self.apply_change_external(change)  
+
+    def remove(self, item):
+        position = self._value.index(item)
+        change = ListChangeTypes.PopChange(self._name,position)
+        self.apply_change_external(change)
+    
+    def __len__(self):
+        return len(self._value)
+    
+    def __getitem__(self, key):
+        return self._value[key]
+    
+    def __setitem__(self, position, value):
+        self.pop(position)
+        self.insert(value,position)
+
+    def __delitem__(self, position):
+        self.pop(position)
+    
+    def notify_listeners(self,change:Change, old_value:list, new_value:list):
+        super().notify_listeners(change,old_value,new_value)
+        match change:
+            case ListChangeTypes.SetChange():
+                # pop all and insert all
+                for i,item in reversed(list(enumerate(old_value))):
+                    self.on_pop(item,i)
+                for i,item in enumerate(new_value):
+                    self.on_insert(item,i)
+            case ListChangeTypes.InsertChange():
+                self.on_insert(change.item,change.position)
+            case ListChangeTypes.PopChange():
+                self.on_pop(change.item,change.position)
+            case _:
+                raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class DictTopic(Topic):
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
@@ -269,6 +324,12 @@ class DictTopic(Topic):
 
     def __getitem__(self, key):
         return self._value[key]
+    
+    def __setitem__(self, key, value):
+        self.add(key,value)
+    
+    def __delitem__(self, key):
+        self.remove(key)
 
     def notify_listeners(self,change:Change, old_value:dict, new_value:dict):
         super().notify_listeners(change,old_value,new_value)
@@ -334,7 +395,7 @@ class EventTopic(Topic):
             case EventChangeTypes.ReversedEmitChange():
                 args = merge_dicts(change.args,change.forward_info)
                 self.on_reverse(**args)
-        
+
 all_topic_types = {
     'generic': GenericTopic,
     'string': StringTopic,
@@ -342,5 +403,6 @@ all_topic_types = {
     'float': FloatTopic,
     'set': SetTopic,
     'dict': DictTopic,
-    'event': EventTopic    
+    'list': ListTopic,
+    'event': EventTopic
 }
