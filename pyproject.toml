@@ -1,6 +1,6 @@
 [project]
 name = "chatroom"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
     'websockets',
     'termcolor',

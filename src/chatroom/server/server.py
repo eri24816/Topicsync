@@ -133,7 +133,7 @@ class ChatroomServer:
         topic.emit(args)
 
     T = TypeVar("T", bound=Topic)
-    def topic(self, topic_name, type: type[T]) -> T:
+    def topic(self, topic_name, type: type[T]=Topic) -> T:
         '''
         Get a existing topic
         '''
@@ -141,8 +141,9 @@ class ChatroomServer:
             topic = self._state_machine.get_topic(topic_name)
             if type.get_type_name() == 'generic':
                 return topic # type: ignore
-            assert isinstance(topic, type)
-            return topic
+            #assert isinstance(topic, type)
+            assert type is Topic or topic.get_type_name() == type.get_type_name(), f"Topic {topic_name} is of type {topic.get_type_name()} but {type.get_type_name()} was requested"
+            return topic # type: ignore
         else:
             raise Exception(f"Topic {topic_name} does not exist")
         

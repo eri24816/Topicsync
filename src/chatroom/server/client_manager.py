@@ -1,4 +1,4 @@
-from __future__ import annotations
+
 import asyncio
 import json
 import traceback
@@ -19,7 +19,7 @@ def parse_message(message_json)->Tuple[str,dict]:
     return message["type"],message["args"]
 
 class Client:
-    def __init__(self,id,ws:WebSocketServerProtocol,logger,sending_queue:asyncio.Queue[Tuple[Client,Tuple,Dict]]):
+    def __init__(self,id,ws:WebSocketServerProtocol,logger,sending_queue:asyncio.Queue[Tuple['Client',Tuple,Dict]]):
         self.id = id
         self._ws = ws
         self._logger = logger
