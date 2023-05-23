@@ -50,7 +50,7 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),'')
         self.assertEqual(c.get(),'')
-        self.assertEqual(changes_list,[])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a','a'])
 
         with machine.record():
             a.set('Eric')
@@ -78,7 +78,7 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),'')
         self.assertEqual(c.get(),'')
-        self.assertEqual(changes_list,[])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a','a'])
         
         with machine.record():
             a.set('Eric')
@@ -119,7 +119,7 @@ class StateMachineTransition(unittest.TestCase):
         
         self.assertEqual(a.get(), '')
         self.assertEqual(b.get(), '')
-        self.assertEqual(changes_list,[])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'a'])
 
     def test_fail_set_with_except(self):
         changes_list = []
@@ -182,7 +182,7 @@ class StateMachineTransition(unittest.TestCase):
         d.on_set += lambda value: e.set('newe')
         with machine.record():
             try:
-                a.set('hello')
+                a.set('newa')
             except:
                 pass
         
@@ -191,7 +191,39 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(c.get(), '')
         self.assertEqual(d.get(), '')
         self.assertEqual(e.get(), '')
-        self.assertEqual(changes_list,[])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'd', 'e', 'b', 'b', 'e', 'd', 'a'])
+
+    def test_fail_subtrees_2(self):
+        changes_list = []
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        a=machine.add_topic('a',StringTopic)
+        b=machine.add_topic('b',StringTopic)
+        c=machine.add_topic('c',StringTopic)
+        d=machine.add_topic('d',StringTopic)
+        e=machine.add_topic('e',StringTopic)
+    
+        a.on_set += lambda value: d.set('newd')
+        a.on_set += lambda value: b.set('newb')
+
+        def b_on_set(value):
+            try:
+                c.set('newc')
+            except:
+                pass
+
+        b.on_set += b_on_set
+        c.add_validator(lambda old,new,change: False)
+        d.on_set += lambda value: e.set('newe')
+        
+        with machine.record():
+            a.set('newa')
+        
+        self.assertEqual(a.get(), 'newa')
+        self.assertEqual(b.get(), 'newb')
+        self.assertEqual(c.get(), '')
+        self.assertEqual(d.get(), 'newd')
+        self.assertEqual(e.get(), 'newe')
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'd', 'e', 'b'])
 
 from chatroom import HistoryManager
 class UndoRedo(unittest.TestCase):
