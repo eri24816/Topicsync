@@ -214,6 +214,7 @@ class StateMachine:
                 if self._inside_emit_change:
                     raise RuntimeError("An error has occured inside an event change. Please avoid that. The state is now in an inconsistent state. The error was: \n" + str(traceback.format_exc()))
                 if topic.is_stateful():
+                    self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
                     with self._block_recursion():
                         self._transition_tree.clear_subtree()
                 raise

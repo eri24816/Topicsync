@@ -27,7 +27,7 @@ class Client:
 
     async def _send_raw(self,message):
         await self._ws.send(message)
-        self._logger.debug(f"<{self.id} {message}")
+        self._logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
         await self._send_raw(make_message(*args,**kwargs))
@@ -69,7 +69,7 @@ class ClientManager:
             await client.send_async("hello",id=client_id)
 
             async for message in ws:
-                self._logger.debug(f"> {message}")
+                self._logger.debug(f"> {message[:100]}")
                 message_type, args = parse_message(message)
                 if message_type in self._message_handlers:
                     return_value = self._message_handlers[message_type](sender = client,**args)
@@ -115,7 +115,8 @@ class ClientManager:
         self._subscriptions[topic_name].add(sender.id)
         self._logger.info(f"Client {sender.id} subscribed to {topic_name}")
         value = self._get_topic_value(topic_name)
-        self.send(sender,"update",changes=[SetChange(topic_name,value).serialize()],action_id="")
+        #self.send(sender,"update",changes=[SetChange(topic_name,value).serialize()],action_id="")
+        self.send(sender,"init",topic_name=topic_name,value=value)
 
     def _handle_unsubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].discard(sender.id)

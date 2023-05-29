@@ -101,11 +101,23 @@ class Topic(metaclass = abc.ABCMeta):
 
         Note that only the state machine is allowed to call this method.
         '''
+        #Logger('Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
+        tmp = change.serialize()
+        tmp.pop('topic_type')
+        tmp.pop('topic_name')
+        tmp.pop('id')
+        printed = '\t'
+        for s in [f'{k}:{v}' for k,v in tmp.items()]:
+            printed += s
+            printed += ', '
+        
+        Logger('Topic').log(f'{self._name}: {printed}',DEBUG)
+
         old_value = self._value
         new_value = self._validate_change_and_get_result(change)
         self._value = new_value
 
-        Logger('Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
+
 
         if notify_listeners:
             try:

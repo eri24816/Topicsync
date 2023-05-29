@@ -57,7 +57,7 @@ class Change:
             self.id = id
     def apply(self, old_value):
         return old_value
-    def serialize(self):
+    def serialize(self)->dict[str,Any]:
         raise NotImplementedError()
     def inverse(self)->Change:
         '''
