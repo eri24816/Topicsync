@@ -280,6 +280,9 @@ class ListTopic(Topic):
     def __len__(self):
         return len(self._value)
     
+    def __iter__(self):
+        return self._value.__iter__()
+    
     def __getitem__(self, key):
         return self._value[key]
     
