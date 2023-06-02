@@ -1,16 +1,7 @@
-[tool.poetry]
+[project]
 name = "chatroom"
 version = "0.5.2"
-description = ""
-authors = ["eri24816 <a931eric@gmail.com>"]
-readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.11"
-websockets = "^11.0.3"
-termcolor = "^2.3.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+dependencies = [
+    'websockets',
+    'termcolor',
+]
