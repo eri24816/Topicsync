@@ -89,3 +89,16 @@ def astype(value:Any,type_:type[T])->T:
         return value
     else:
         raise TypeError(f"{type(value)} is not subtype of {type_}")
+
+class IdGenerator:
+    instance = None
+    @staticmethod
+    def generate_id():
+        if IdGenerator.instance is None:
+            IdGenerator.instance = IdGenerator()
+        return IdGenerator.instance()
+    def __init__(self):
+        self._id = 0
+    def __call__(self):
+        self._id += 1
+        return '0_'+str(self._id) # 0 means server

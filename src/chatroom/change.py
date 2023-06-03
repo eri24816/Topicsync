@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, List, Optional
 import copy
 
+from chatroom.utils import IdGenerator
+
 if TYPE_CHECKING:
     from chatroom.topic import Topic
 '''
@@ -9,7 +11,6 @@ Change is a class that represents a change to a topic. It can be serialized and 
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).
 The server then sends the change to all the subscribers of the topic.
 '''
-import uuid
 
 class InvalidChangeError(Exception):
     def __init__(self,change:Change,reason:str):
@@ -52,7 +53,7 @@ class Change:
     def __init__(self,topic_name,id:Optional[str]=None):
         self.topic_name = topic_name
         if id is None:
-            self.id = str(uuid.uuid4())
+            self.id = IdGenerator.generate_id()
         else:
             self.id = id
     def apply(self, old_value):
@@ -256,7 +257,7 @@ class DictChangeTypes:
                 raise InvalidChangeError(self,f'{self.key} is not in {old_dict}')
             if self.old_value != old_dict[self.key]:
                 # regenerate id
-                self.id = str(uuid.uuid4())
+                self.id = IdGenerator.generate_id()
             self.old_value = old_dict[self.key]
             old_dict[self.key] = self.value
             return old_dict
