@@ -148,10 +148,10 @@ class ChatroomServer:
             raise Exception(f"Topic {topic_name} does not exist")
         
     T = TypeVar("T", bound=Topic)
-    def add_topic(self, topic_name, type: type[T],init_value=None) -> T:
+    def add_topic(self, topic_name, type: type[T],init_value=None,is_stateful=True) -> T:
         if self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} already exists")
-        self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':True})
+        self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':is_stateful})
         self._logger.debug(f"Added topic {topic_name}")
         new_topic = self.topic(topic_name,type)
         return new_topic
