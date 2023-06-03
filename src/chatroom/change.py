@@ -83,12 +83,12 @@ class SetChange(Change):
         self.old_value = copy.deepcopy(old_value)
     def apply(self, old_value):
         old_value = copy.deepcopy(old_value)
-        if self.old_value != None:
-            #? Is it correct?
-            assert old_value == self.old_value, f'old_value: {old_value} != self.old_value: {self.old_value}'
-        # if self.old_value != old_value:
-        #     # If the old value is different, then this change is not the same as the one that was sent to the server.
-        #     self.id = str(uuid.uuid4()) 
+        # if self.old_value != None:
+        #     #? Is it correct?
+        #     assert old_value == self.old_value, f'old_value: {old_value} != self.old_value: {self.old_value}'
+        if self.old_value != old_value:
+            # If the old value is different, then this change is not the same as the one that was sent to the server.
+            self.id = IdGenerator.generate_id()
         self.old_value = old_value
         return copy.deepcopy(self.value)
     def inverse(self)->Change:
