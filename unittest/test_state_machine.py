@@ -339,7 +339,7 @@ class RunAfterTransition(unittest.TestCase):
         e.on_reverse += lambda old: (a.set(old),print('reverse',old)) # This is called when undoing.
 
         # Although the callback c.set is added before b.set, it will be called after b.set, in the next transition.
-        a.on_set += lambda value: machine.run_after_transition(lambda: c.set(value+' !'))
+        a.on_set += lambda value: machine.do_after_transition(lambda: c.set(value+' !'))
         a.on_set += lambda value: b.set(value+' world')
 
         with machine.record():

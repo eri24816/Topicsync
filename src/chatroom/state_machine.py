@@ -263,7 +263,7 @@ class StateMachine:
                     self.apply_change(change)
                     self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
 
-    def run_after_transition(self,task): #TODO: thread safety?
+    def do_after_transition(self,task): #TODO: thread safety?
         '''
         Run a task after the current transition is done. Changes made by the task will be separately recorded as the next transition.
         Do nothing if undoing or redoing.

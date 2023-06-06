@@ -33,6 +33,7 @@ class ChatroomServer:
         self._topic_list.on_remove += self._remove_topic_raw
 
         self.record = self._state_machine.record
+        self.do_after_transition = self._state_machine.do_after_transition
 
     async def serve(self):
         '''
