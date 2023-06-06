@@ -1,9 +1,9 @@
 from __future__ import annotations
+import enum
 import traceback
 from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager, nullcontext
 from typing import Any, Callable, List
-from chatroom import change
 
 from chatroom.change import EventChangeTypes, NullChange
 from chatroom.topic import Topic, topic_factory
@@ -32,6 +32,12 @@ class TreeNode:
             topic.apply_change(inv_change)
             self.changes_made.append(inv_change)
             self.parent.children.remove(self)
+
+class Phase(enum.Enum):
+    IDLE = 0
+    FORWARDING = 1
+    UNDOING = 2
+    REDOING = 3
 
 class RootNode(TreeNode):
     def __init__(self):
@@ -70,6 +76,7 @@ class Tree:
 
 class StateMachine:
     def __init__(self, on_changes_made:Callable[[List[Change],str], None]=lambda *args:None, on_transition_done: Callable[[Transition], None]=lambda *args:None):
+        self._phase: Phase = Phase.IDLE
         self._state : dict[str,Topic] = {}
         self._is_recording = False
         self._changes_made : List[Change] = []
@@ -80,6 +87,7 @@ class StateMachine:
         self._inside_emit_change = False
         self._transition_tree = None
         self._logger = Logger("State")
+        self._tasks_to_run_after_transition: List[Callable[[],None]] = []
     
     T = TypeVar('T', bound=Topic)
     def add_topic(self,name:str,topic_type:type[T],is_stateful:bool = True,init_value:Any=None)->T:
@@ -110,15 +118,20 @@ class StateMachine:
             self._max_recursive_depth = 1e4
 
     @contextmanager
-    def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True):
+    def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True,phase:Phase = Phase.FORWARDING):
         #TODO: thread lock
         if self._is_recording:
             if not allow_reentry:
                 raise RuntimeError("Cannot call record while already recording")
             else:
+                # Already recording, just skip to yield
                 yield
                 return
+            
+        # Set up the recording
+
         self._is_recording = True
+        self._phase = phase
         self._error_has_occured_in_transition = False
         self._changes_made = []
         self._transition_tree = Tree(self.get_topic,self._changes_made)
@@ -137,6 +150,7 @@ class StateMachine:
                 self._on_transition_done(new_transition)
         finally:
             self._is_recording = False
+            self._phase = Phase.IDLE
             # discard NullChange, EmitChange, ReversedEmitChange
             self._changes_made = [
                 change for change in self._changes_made
@@ -145,6 +159,10 @@ class StateMachine:
                 self._on_changes_made(self._changes_made,action_id)
             self._changes_made = []
             self._transition_tree = None
+
+            for task in self._tasks_to_run_after_transition:
+                task()
+            self._tasks_to_run_after_transition = []
 
     def _cleanup_failed_transition(self):
         try:
@@ -222,7 +240,7 @@ class StateMachine:
     def undo(self, transition: Transition, action_source=0):
         # Record the changes made by the undo
         # Undo should not be recorded as a transition
-        with self.record(action_source=action_source,emit_transition=False):
+        with self.record(action_source=action_source,emit_transition=False,phase=Phase.UNDOING):
             # Block recursive calls to change stateful topics. Only to undo the transition itself
             with self._block_recursion(1):
                 # Revert the transition
@@ -235,7 +253,7 @@ class StateMachine:
     def redo(self, transition: Transition):
         # Record the changes made by the redo
         # Redo should not be recorded as a transition
-        with self.record(emit_transition=False):
+        with self.record(emit_transition=False,phase=Phase.REDOING):
             # Block recursive calls to change stateful topics. Only to redo the transition itself
             with self._block_recursion(1):
                 # Revert the transition
@@ -245,3 +263,14 @@ class StateMachine:
                     self.apply_change(change)
                     self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
 
+    def run_after_transition(self,task): #TODO: thread safety?
+        '''
+        Run a task after the current transition is done. Changes made by the task will be separately recorded as the next transition.
+        Do nothing if undoing or redoing.
+        '''
+        if self._phase == Phase.IDLE: 
+            task()
+        elif self._phase == Phase.FORWARDING:
+            self._tasks_to_run_after_transition.append(task)
+        else:
+            return
