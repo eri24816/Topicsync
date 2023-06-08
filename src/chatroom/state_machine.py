@@ -1,5 +1,7 @@
 from __future__ import annotations
 import enum
+import logging
+logger = logging.getLogger(__name__)
 import threading
 import traceback
 from typing import TYPE_CHECKING, TypeVar
@@ -8,7 +10,6 @@ from typing import Any, Callable, List
 
 from chatroom.change import EventChangeTypes, NullChange
 from chatroom.topic import Topic, topic_factory
-from chatroom.logger import Logger
 if TYPE_CHECKING:
     from chatroom.change import Change
 
@@ -88,7 +89,6 @@ class StateMachine:
         self._apply_change_call_stack = []
         self._inside_emit_change = False
         self._transition_tree = None
-        self._logger = Logger("State")
         self._tasks_to_run_after_transition: List[Callable[[],None]] = []
     
     T = TypeVar('T', bound=Topic)
@@ -143,7 +143,7 @@ class StateMachine:
                 yield
             except Exception:
                 self._is_recording = False
-                self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
+                logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
                 self._cleanup_failed_transition()
                 raise
             else:
@@ -176,7 +176,7 @@ class StateMachine:
                 assert self._transition_tree.current_node.is_root
                 self._transition_tree.clear_subtree()
         except Exception as e:
-            self._logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" +str(traceback.format_exc()))
+            logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" +str(traceback.format_exc()))
             raise
 
     @contextmanager
@@ -240,7 +240,7 @@ class StateMachine:
                     if self._inside_emit_change:
                         raise RuntimeError("An error has occured inside an event change. Please avoid that. The state is now in an inconsistent state. The error was: \n" + str(traceback.format_exc()))
                     if topic.is_stateful():
-                        self._logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
+                        logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
                         with self._block_recursion():
                             self._transition_tree.clear_subtree()
                     raise
@@ -255,10 +255,10 @@ class StateMachine:
             with self._block_recursion(1):
                 # Revert the transition
                 for change in reversed(transition.changes):
-                    self._logger.debug("Undoing by change: " +str(change.inverse().serialize()))
-                    self._logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
+                    logger.debug("Undoing by change: " +str(change.inverse().serialize()))
+                    logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
                     self.apply_change(change.inverse())
-                    self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
+                    logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
     
     def redo(self, transition: Transition):
         # Record the changes made by the redo
@@ -268,10 +268,10 @@ class StateMachine:
             with self._block_recursion(1):
                 # Revert the transition
                 for change in transition.changes:
-                    self._logger.debug("Redoing change: " +str(change.serialize()))
-                    self._logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
+                    logger.debug("Redoing change: " +str(change.serialize()))
+                    logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
                     self.apply_change(change)
-                    self._logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
+                    logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
 
     def do_after_transition(self,task): #TODO: thread safety?
         '''

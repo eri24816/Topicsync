@@ -1,5 +1,7 @@
 import asyncio
 from typing import Any, Callable, Dict, List, TypeVar
+import logging
+logger = logging.getLogger(__name__)
 
 from websockets.server import serve as websockets_serve
 from chatroom import state_machine
@@ -8,7 +10,6 @@ from chatroom.server.client_manager import ClientManager, Client
 from chatroom.service import Service
 from chatroom.state_machine import StateMachine, Transition
 from chatroom.topic import DictTopic, EventTopic, Topic, SetTopic
-from chatroom.logger import Logger, DEBUG
 from chatroom.change import Change
 
 
@@ -16,7 +17,6 @@ class ChatroomServer:
     def __init__(self, port: int, host:str='localhost',on_transition_done=lambda transition:None) -> None:
         self._port = port
         self._host = host
-        self._logger = Logger("Server")
         def get_value(topic_name):
             topic = self._state_machine.get_topic(topic_name)
             return topic.get()
@@ -39,7 +39,7 @@ class ChatroomServer:
         '''
         Entry point for the server
         '''
-        self._logger.info(f"Starting ws server on port {self._port}")
+        logger.info(f"Starting ws server on port {self._port}")
         self._client_manager.register_message_handler("action",self._handle_action)
         self._client_manager.register_message_handler("request",self._handle_request)
         await asyncio.gather(
@@ -153,7 +153,7 @@ class ChatroomServer:
         if self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} already exists")
         self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':is_stateful})
-        self._logger.debug(f"Added topic {topic_name}")
+        logger.debug(f"Added topic {topic_name}")
         new_topic = self.topic(topic_name,type)
         return new_topic
         
@@ -166,7 +166,7 @@ class ChatroomServer:
             temp['boundary_value'] = topic.get()
             self._topic_list.change_value(topic_name,temp)
             self._topic_list.remove(topic_name)
-        self._logger.debug(f"Removed topic {topic_name}")
+        logger.debug(f"Removed topic {topic_name}")
 
     def undo(self,transition:Transition):
         self._state_machine.undo(transition)

@@ -1,9 +1,10 @@
 from __future__ import annotations
 import copy
 import json
+import logging
+logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
 from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
-from chatroom.logger import DEBUG, Logger
 from chatroom.utils import Action, camel_to_snake
 import abc
 
@@ -101,7 +102,6 @@ class Topic(metaclass = abc.ABCMeta):
 
         Note that only the state machine is allowed to call this method.
         '''
-        #Logger('Topic').log(f'{self._name} changed from {old_value} to {new_value}',DEBUG)
         tmp = change.serialize()
         tmp.pop('topic_type')
         tmp.pop('topic_name')
@@ -111,7 +111,7 @@ class Topic(metaclass = abc.ABCMeta):
             printed += s
             printed += ', '
         
-        Logger('Topic').log(f'{self._name}: {printed}',DEBUG)
+        logger.debug(f'{self._name} changed: {printed}')
 
         old_value = self._value
         new_value = self._validate_change_and_get_result(change)

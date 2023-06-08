@@ -1,6 +1,8 @@
 
 import asyncio
 import json
+import logging
+logger = logging.getLogger(__name__)
 import traceback
 from typing import Awaitable, Callable, Dict, List, Tuple
 from itertools import count
@@ -8,7 +10,6 @@ from collections import defaultdict
 
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
-from chatroom import logger
 from chatroom.change import Change, SetChange
 
 def make_message(message_type,**kwargs)->str:
@@ -19,15 +20,14 @@ def parse_message(message_json)->Tuple[str,dict]:
     return message["type"],message["args"]
 
 class Client:
-    def __init__(self,id,ws:WebSocketServerProtocol,logger,sending_queue:asyncio.Queue[Tuple['Client',Tuple,Dict]]):
+    def __init__(self,id,ws:WebSocketServerProtocol,sending_queue:asyncio.Queue[Tuple['Client',Tuple,Dict]]):
         self.id = id
         self._ws = ws
-        self._logger = logger
         self._sending_queue = sending_queue
 
     async def _send_raw(self,message):
         await self._ws.send(message)
-        self._logger.debug(f"<{self.id} {message[:100]}")
+        logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
         await self._send_raw(make_message(*args,**kwargs))
@@ -39,7 +39,6 @@ class ClientManager:
     def __init__(self,get_topic_value,exists_topic) -> None:
         self._get_topic_value = get_topic_value
         self._exists_topic = exists_topic
-        self._logger = logger.Logger("CM")
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
         self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._handle_subscribe,
@@ -62,28 +61,28 @@ class ClientManager:
         '''
         Handle a client connection. 
         '''
+        client_id = next(self._client_id_count)
+        client = self._clients[client_id] = Client(client_id,ws,self._sending_queue)
         try:
-            client_id = next(self._client_id_count)
-            client = self._clients[client_id] = Client(client_id,ws,self._logger,self._sending_queue)
-            self._logger.info(f"Client {client_id} connected")
+            logger.info(f"Client {client_id} connected")
             await client.send_async("hello",id=client_id)
 
             async for message in ws:
-                self._logger.debug(f"> {message[:100]}")
+                logger.debug(f"> {message[:100]}")
                 message_type, args = parse_message(message)
                 if message_type in self._message_handlers:
                     return_value = self._message_handlers[message_type](sender = client,**args)
                     if isinstance(return_value,Awaitable):
                         await return_value
                 else:
-                    self._logger.error(f"Unknown message type: {message_type}")
+                    logger.error(f"Unknown message type: {message_type}")
                     pass
 
         except ConnectionClosed as e:
-            self._logger.info(f"Client {client_id} disconnected: {repr(e)}")
+            logger.info(f"Client {client_id} disconnected: {repr(e)}")
             self._cleanup_client(client)
         except Exception as e:
-            self._logger.error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
+            logger.error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
             self._cleanup_client(client)
 
     def send_update(self,changes:List[Change],action_id:str):
@@ -110,10 +109,10 @@ class ClientManager:
         if not self._exists_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
             #? Should we send a message to the client?
-            self._logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
+            logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         self._subscriptions[topic_name].add(sender.id)
-        self._logger.info(f"Client {sender.id} subscribed to {topic_name}")
+        logger.info(f"Client {sender.id} subscribed to {topic_name}")
         value = self._get_topic_value(topic_name)
         #self.send(sender,"update",changes=[SetChange(topic_name,value).serialize()],action_id="")
         self.send(sender,"init",topic_name=topic_name,value=value)

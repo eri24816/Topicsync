@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 from chatroom import ChatroomServer, HistoryManager
 
 import asyncio
@@ -10,7 +12,7 @@ from chatroom.topic import FloatTopic, IntTopic, StringTopic, SetTopic, GenericT
 # client.makeRequest('greet', {name:'Eric'}, (response: any) => {
 #     print(response);
 # });
-
+logging.basicConfig(level=logging.INFO)
 history = HistoryManager()
 server = ChatroomServer(8765,on_transition_done = history.add_transition)
 history.set_server(server)
