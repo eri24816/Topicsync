@@ -119,4 +119,9 @@ class ClientManager:
 
     def _handle_unsubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].discard(sender.id)
-        
+    
+    def set_client_id_count(self,id_count):
+        self._client_id_count = count(id_count)
+
+    def get_client_id_count(self):
+        return next(self._client_id_count)

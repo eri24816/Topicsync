@@ -23,6 +23,8 @@ class ChatroomServer:
         def exists_topic(topic_name):
             return self._state_machine.has_topic(topic_name)
         self._client_manager = ClientManager(get_value,exists_topic)
+        self.set_client_id_count = self._client_manager.set_client_id_count
+        self.get_client_id_count = self._client_manager.get_client_id_count
         self._services: Dict[str, Service] = {}
         self._state_machine = StateMachine(self._on_changes_made,on_transition_done)
 
