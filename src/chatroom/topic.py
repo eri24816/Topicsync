@@ -390,7 +390,7 @@ class EventTopic(Topic):
         self.on_reverse = Action()
     
     def set(self, value):
-        raise NotImplementedError('You cannot set the value of an event topic.')
+        return # do nothing
 
     def emit(self,args={}):
         change = EventChangeTypes.EmitChange(self._name,args)

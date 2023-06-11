@@ -113,7 +113,7 @@ class ChatroomServer:
         if is_stateful and inverse_callback is None:
             raise ValueError("inverse_callback must be provided if is_stateful is True")
         if not self._state_machine.has_topic(event_name):
-            self._state_machine.add_topic(event_name,EventTopic,is_stateful=is_stateful)
+            self.add_topic(event_name,EventTopic,is_stateful=is_stateful)
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
         topic.on_emit += callback
@@ -130,7 +130,7 @@ class ChatroomServer:
             - args: The arguments to pass to the event callback
         """
         if not self._state_machine.has_topic(event_name):
-            self._state_machine.add_topic(event_name,EventTopic)
+            raise Exception(f"Topic {event_name} does not exist")
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
         topic.emit(args)

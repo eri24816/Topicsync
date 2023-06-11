@@ -226,6 +226,20 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(e.get(), 'newe')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'd', 'e', 'b'])
 
+    def test_recreate_topic(self):
+        changes_list = []
+        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        a=machine.add_topic('a',StringTopic)
+    
+        machine.remove_topic('a')
+        a=machine.add_topic('a',StringTopic)
+
+        a.set('newa')
+
+        self.assertEqual(machine.get_topic('a'),a)
+        self.assertEqual(a.get(), 'newa')
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a'])
+
 from chatroom import HistoryManager
 class UndoRedo(unittest.TestCase):
     def test_undo_redo(self):
