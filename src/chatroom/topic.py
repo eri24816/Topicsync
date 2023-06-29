@@ -1,12 +1,15 @@
 from __future__ import annotations
+
+import base64
 import copy
 import json
 import logging
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
-from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, BinaryChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
+import pickle
 
 if TYPE_CHECKING:
     from chatroom.state_machine import StateMachine
@@ -411,6 +414,24 @@ class EventTopic(Topic):
                 args = merge_dicts(change.args,change.forward_info)
                 self.on_reverse(**args)
 
+class BinaryTopic(Topic):
+    def set(self, value):
+        # set() may throw error if value cannot be encoded by base64 library
+        # Such case happens when value is not a byte-like object
+
+        # base64 decode/encode is done in topic (rather than change)
+        # so topic can easily determine whether to apply change by comparing base64 string
+
+        b64 = base64.b64encode(value)
+        if b64 == self._value:
+            return
+        change = BinaryChangeTypes.SetChange(self._name, b64)
+        self.apply_change_external(change)
+
+    def get(self):
+        return base64.b64decode(self._value)
+
+
 all_topic_types = {
     'generic': GenericTopic,
     'string': StringTopic,
@@ -419,5 +440,6 @@ all_topic_types = {
     'set': SetTopic,
     'dict': DictTopic,
     'list': ListTopic,
-    'event': EventTopic
+    'event': EventTopic,
+    'binary': BinaryTopic
 }
