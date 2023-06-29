@@ -256,9 +256,7 @@ class StateMachine:
                 # Revert the transition
                 for change in reversed(transition.changes):
                     logger.debug("Undoing by change: " +str(change.inverse().serialize()))
-                    logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
                     self.apply_change(change.inverse())
-                    logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
     
     def redo(self, transition: Transition):
         # Record the changes made by the redo
@@ -269,9 +267,7 @@ class StateMachine:
                 # Revert the transition
                 for change in transition.changes:
                     logger.debug("Redoing change: " +str(change.serialize()))
-                    logger.debug("Before: " + str(self.get_topic(change.topic_name).get()))
                     self.apply_change(change)
-                    logger.debug("After: " + str(self.get_topic(change.topic_name).get()))
 
     def do_after_transition(self,task): #TODO: thread safety?
         '''

@@ -186,22 +186,23 @@ class ListChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"list","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
     class InsertChange(Change):
-        def __init__(self,topic_name, item,position,id=None):
+        def __init__(self,topic_name, item,position:int,id=None):
             super().__init__(topic_name,id)
             self.item = item
             self.position = position
         def apply(self, old_value:list):
             if self.position < 0:
-                self.position = len(old_value) + self.position
+                t=self.position
+                self.position = len(old_value) + self.position + 1 # +1 because insert inserts before the position
             old_value.insert(self.position,self.item)
             return old_value
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
         def inverse(self)->Change:
-            return ListChangeTypes.PopChange(self.topic_name,self.item)
+            return ListChangeTypes.PopChange(self.topic_name,self.position)
         
     class PopChange(Change):
-        def __init__(self,topic_name, position,id=None):
+        def __init__(self,topic_name, position:int,id=None):
             super().__init__(topic_name,id)
             self.position = position
         def apply(self, old_value:list):
