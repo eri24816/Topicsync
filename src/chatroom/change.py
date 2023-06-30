@@ -45,12 +45,12 @@ def type_validator(*ts):
         return False
     return f
 
-class Change: 
+class Change:
     @staticmethod
     def deserialize(change_dict:dict[str,Any])->Change:
         change_type, topic_type, change_dict = change_dict['type'], change_dict['topic_type'], remove_entry(remove_entry(change_dict,'type'),'topic_type')
         return type_name_to_change_types[topic_type].types[change_type](**change_dict)
-    
+
     def __init__(self,topic_name,id:Optional[str]=None):
         self.topic_name = topic_name
         if id is None:
@@ -66,7 +66,7 @@ class Change:
         Inverse() is defined after Apply called. It returns a change that will undo the change.
         '''
         raise NotImplementedError()
-    
+
 class NullChange(Change):
     def __init__(self,topic_name,id=None):
         super().__init__(topic_name,id)
@@ -96,26 +96,36 @@ class SetChange(Change):
         return self.__class__(self.topic_name,copy.deepcopy(self.old_value),copy.deepcopy(self.value))
     def serialize(self):
         return {"topic_name":self.topic_name,"topic_type":"unknown","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+    def __eq__(self, other):
+        if type(self) != type(other):
+            # type will return the immediate type (simply, subtype), so we use type and compare them directly
+            # simple subclass of SetChange therefore don't need to write their own __eq__ method
+            return False
+        return self.topic_name == other.topic_name and \
+            self.value == other.value and \
+            self.old_value == other.old_value and \
+            self.id == other.id
+
 
 class GenericChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"generic","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-        
+
     types = {'set':SetChange}
 
 class StringChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-        
+
     types = {'set':SetChange}
 
 class IntChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"int","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-    
+
     class AddChange(Change):
         def __init__(self,topic_name, value,id=None):
             super().__init__(topic_name,id)
@@ -126,14 +136,20 @@ class IntChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"int","type":"add","value":self.value,"id":self.id}
         def inverse(self)->Change:
             return IntChangeTypes.AddChange(self.topic_name,-self.value)
-    
+        def __eq__(self, other):
+            if not isinstance(other, IntChangeTypes.AddChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.value == other.value and \
+                self.id == other.id
+
     types = {'set':SetChange,'add':AddChange}
 
 class FloatChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"float","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-    
+
     class AddChange(Change):
         def __init__(self,topic_name, value,id=None):
             super().__init__(topic_name,id)
@@ -144,7 +160,13 @@ class FloatChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"float","type":"add","value":self.value,"id":self.id}
         def inverse(self)->Change:
             return IntChangeTypes.AddChange(self.topic_name,-self.value)
-    
+        def __eq__(self, other):
+            if not isinstance(other, FloatChangeTypes.AddChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.value == other.value and \
+                self.id == other.id
+
     types = {'set':SetChange,'add':AddChange}
 
 class SetChangeTypes:
@@ -163,7 +185,13 @@ class SetChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"set","type":"append","item":self.item,"id":self.id}
         def inverse(self)->Change:
             return SetChangeTypes.RemoveChange(self.topic_name,self.item)
-        
+        def __eq__(self, other):
+            if not isinstance(other, SetChangeTypes.AppendChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.item == other.item and \
+                self.id == other.id
+
     class RemoveChange(Change):
         def __init__(self,topic_name, item,id=None):
             super().__init__(topic_name,id)
@@ -178,7 +206,13 @@ class SetChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"set","type":"remove","item":self.item,"id":self.id}
         def inverse(self)->Change:
             return SetChangeTypes.AppendChange(self.topic_name,self.item)
-    
+        def __eq__(self, other):
+            if not isinstance(other, SetChangeTypes.RemoveChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.item == other.item and \
+                self.id == other.id
+
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
 class ListChangeTypes:
@@ -201,7 +235,13 @@ class ListChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
         def inverse(self)->Change:
             return ListChangeTypes.PopChange(self.topic_name,self.position)
-        
+        def __eq__(self, other):
+            if not isinstance(other, ListChangeTypes.InsertChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.item == other.item and \
+                self.position == other.position and \
+                self.id == other.id
     class PopChange(Change):
         def __init__(self,topic_name, position:int,id=None):
             super().__init__(topic_name,id)
@@ -215,6 +255,14 @@ class ListChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"list","type":"pop","position":self.position,"id":self.id}
         def inverse(self)->Change:
             return ListChangeTypes.InsertChange(self.topic_name,self.item,self.position)
+        def __eq__(self, other):
+            if not isinstance(other, ListChangeTypes.PopChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.position == other.position and \
+                self.id == other.id
+
+    types = {'set': SetChange, 'insert': InsertChange, 'pop': PopChange}
 
 class DictChangeTypes:
     class SetChange(SetChange):
@@ -234,6 +282,13 @@ class DictChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"dict","type":"add","key":self.key,"value":self.value,"id":self.id}
         def inverse(self)->Change:
             return DictChangeTypes.RemoveChange(self.topic_name,self.key)
+        def __eq__(self, other):
+            if not isinstance(other, DictChangeTypes.AddChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.key == other.key and \
+                self.value == other.value and \
+                self.id == other.id
     class RemoveChange(Change):
         def __init__(self,topic_name, key,id=None):
             super().__init__(topic_name,id)
@@ -248,6 +303,12 @@ class DictChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"dict","type":"remove","key":self.key,"id":self.id}
         def inverse(self)->Change:
             return DictChangeTypes.AddChange(self.topic_name,self.key,self.value)
+        def __eq__(self, other):
+            if not isinstance(other, DictChangeTypes.RemoveChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.key == other.key and \
+                self.id == other.id
     class ChangeValueChange(Change):
         def __init__(self,topic_name, key,value,old_value=None,id=None):
             super().__init__(topic_name,id)
@@ -267,20 +328,35 @@ class DictChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"dict","type":"change_value","key":self.key,"value":self.value,"old_value":self.old_value,"id":self.id}
         def inverse(self)->Change:
             return DictChangeTypes.ChangeValueChange(self.topic_name,self.key,self.old_value,self.value)
+        def __eq__(self, other):
+            if not isinstance(other, DictChangeTypes.ChangeValueChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.key == other.key and \
+                self.value == other.value and \
+                self.old_value == other.old_value and \
+                self.id == other.id
     types = {'set':SetChange,'add':AddChange,'remove':RemoveChange,'change_value':ChangeValueChange}
 
 class EventChangeTypes:
     class EmitChange(Change):
-        def __init__(self,topic_name,args={},id=None):
+        def __init__(self,topic_name,args={},forward_info={},id=None):
             super().__init__(topic_name,id)
             self.args = args
-            self.forward_info = {}
+            self.forward_info = forward_info
         def apply(self,old_value:None):
             return None
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
         def inverse(self)->Change:
             return EventChangeTypes.ReversedEmitChange(self.topic_name,self.args,self.forward_info)
+        def __eq__(self, other):
+            if not isinstance(other, EventChangeTypes.EmitChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.args == other.args and \
+                self.forward_info == other.forward_info and \
+                self.id == other.id
     class ReversedEmitChange(Change):
             def __init__(self,topic_name,args={},forward_info={},id=None):
                 super().__init__(topic_name,id)
@@ -292,6 +368,13 @@ class EventChangeTypes:
                 return {"topic_name":self.topic_name,"topic_type":"event","type":"reversed_emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
             def inverse(self)->Change:
                 return EventChangeTypes.EmitChange(self.topic_name,self.args)
+            def __eq__(self, other):
+                if not isinstance(other, EventChangeTypes.ReversedEmitChange):
+                    return False
+                return self.topic_name == other.topic_name and \
+                    self.args == other.args and \
+                    self.forward_info == other.forward_info and \
+                    self.id == other.id
     types = {'emit':EmitChange,'reversed_emit':ReversedEmitChange}
 
 class BinaryChangeTypes:
