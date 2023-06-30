@@ -112,7 +112,7 @@ class ClientManager:
             logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         self._subscriptions[topic_name].add(sender.id)
-        logger.info(f"Client {sender.id} subscribed to {topic_name}")
+        logger.debug(f"Client {sender.id} subscribed to {topic_name}")
         value = self._get_topic_value(topic_name)
         #self.send(sender,"update",changes=[SetChange(topic_name,value).serialize()],action_id="")
         self.send(sender,"init",topic_name=topic_name,value=value)

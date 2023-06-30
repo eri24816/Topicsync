@@ -45,12 +45,12 @@ def type_validator(*ts):
         return False
     return f
 
-class Change: 
+class Change:
     @staticmethod
     def deserialize(change_dict:dict[str,Any])->Change:
         change_type, topic_type, change_dict = change_dict['type'], change_dict['topic_type'], remove_entry(remove_entry(change_dict,'type'),'topic_type')
         return type_name_to_change_types[topic_type].types[change_type](**change_dict)
-    
+
     def __init__(self,topic_name,id:Optional[str]=None):
         self.topic_name = topic_name
         if id is None:
@@ -66,7 +66,7 @@ class Change:
         Inverse() is defined after Apply called. It returns a change that will undo the change.
         '''
         raise NotImplementedError()
-    
+
 class NullChange(Change):
     def __init__(self,topic_name,id=None):
         super().__init__(topic_name,id)
@@ -111,21 +111,21 @@ class GenericChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"generic","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-        
+
     types = {'set':SetChange}
 
 class StringChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-        
+
     types = {'set':SetChange}
 
 class IntChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"int","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-    
+
     class AddChange(Change):
         def __init__(self,topic_name, value,id=None):
             super().__init__(topic_name,id)
@@ -142,14 +142,14 @@ class IntChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.value == other.value and \
                 self.id == other.id
-    
+
     types = {'set':SetChange,'add':AddChange}
 
 class FloatChangeTypes:
     class SetChange(SetChange):
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"float","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-    
+
     class AddChange(Change):
         def __init__(self,topic_name, value,id=None):
             super().__init__(topic_name,id)
@@ -166,7 +166,7 @@ class FloatChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.value == other.value and \
                 self.id == other.id
-    
+
     types = {'set':SetChange,'add':AddChange}
 
 class SetChangeTypes:
@@ -191,7 +191,7 @@ class SetChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.item == other.item and \
                 self.id == other.id
-        
+
     class RemoveChange(Change):
         def __init__(self,topic_name, item,id=None):
             super().__init__(topic_name,id)
@@ -212,7 +212,7 @@ class SetChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.item == other.item and \
                 self.id == other.id
-    
+
     types = {'set':SetChange,'append':AppendChange,'remove':RemoveChange}
 
 class ListChangeTypes:
@@ -221,19 +221,20 @@ class ListChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"list","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
     class InsertChange(Change):
-        def __init__(self,topic_name, item,position,id=None):
+        def __init__(self,topic_name, item,position:int,id=None):
             super().__init__(topic_name,id)
             self.item = item
             self.position = position
         def apply(self, old_value:list):
             if self.position < 0:
-                self.position = len(old_value) + self.position
+                t=self.position
+                self.position = len(old_value) + self.position + 1 # +1 because insert inserts before the position
             old_value.insert(self.position,self.item)
             return old_value
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
         def inverse(self)->Change:
-            return ListChangeTypes.PopChange(self.topic_name,self.item)
+            return ListChangeTypes.PopChange(self.topic_name,self.position)
         def __eq__(self, other):
             if not isinstance(other, ListChangeTypes.InsertChange):
                 return False
@@ -241,9 +242,8 @@ class ListChangeTypes:
                 self.item == other.item and \
                 self.position == other.position and \
                 self.id == other.id
-
     class PopChange(Change):
-        def __init__(self,topic_name, position,id=None):
+        def __init__(self,topic_name, position:int,id=None):
             super().__init__(topic_name,id)
             self.position = position
         def apply(self, old_value:list):
