@@ -74,7 +74,3 @@ class TestChangeDeserialize(unittest.TestCase):
     def test_dict_change_value(self):
         change = DictChangeTypes.ChangeValueChange('topic', 'k', 'v10', 'v')
         self._test_deserializable(change)
-
-    def test_binary_set(self):
-        change = BinaryChangeTypes.SetChange('topic', 'bbb', '')
-        self._test_deserializable(change)

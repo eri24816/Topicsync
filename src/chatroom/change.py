@@ -27,8 +27,7 @@ default_topic_value = {
     'set':[],
     'list':[],
     'dict':{},
-    'event':None,
-    'binary':None
+    'event':None
 }
 
 def remove_entry(dictionary,key):
@@ -377,15 +376,6 @@ class EventChangeTypes:
                     self.id == other.id
     types = {'emit':EmitChange,'reversed_emit':ReversedEmitChange}
 
-class BinaryChangeTypes:
-    class SetChange(SetChange):
-        def serialize(self):
-            serialized = super().serialize()
-            serialized['topic_type'] = 'binary'
-            return serialized
-
-    types = {'set': SetChange}
-
 type_name_to_change_types = {
                                 'generic':GenericChangeTypes,
                                 'string':StringChangeTypes,
@@ -394,6 +384,5 @@ type_name_to_change_types = {
                                 'set':SetChangeTypes,
                                 'dict':DictChangeTypes,
                                 'list':ListChangeTypes,
-                                'event':EventChangeTypes,
-                                'binary':BinaryChangeTypes
+                                'event':EventChangeTypes
                             }
