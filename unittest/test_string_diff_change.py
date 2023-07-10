@@ -2,7 +2,7 @@ import unittest
 from chatroom.topic import StringTopic
 from chatroom.change import StringChangeTypes
 
-class TestStringDiffChange(unittest.TestCase):
+class TestStringChange(unittest.TestCase):
     def test_diff_change(self):
         topic = StringTopic('test', None, init_value='ddd')
         diff_change = StringChangeTypes.DiffChange(
