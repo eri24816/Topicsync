@@ -118,7 +118,39 @@ class StringChangeTypes:
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
-    types = {'set':SetChange}
+    class DiffChange(Change):
+        def __init__(self, topic_name: str, inst: list[str], id:Optional[str]=None):
+            super().__init__(topic_name, id)
+            self.instructions = inst.copy()
+
+        def apply(self, old_value: str):
+            # cursor stands between characters, it doesn't directly refer to a character
+            # 0 is the first insertable position, right before the first character
+            # here we have a rule to help thinking: the ith cursor positions before the ith character
+            def before(string, cursor):
+                return string[:cursor]
+
+            def after(string, cursor):
+                return string[cursor:]
+
+            cursor = 0
+            modified = old_value
+            for inst in self.instructions:
+                if inst[0] == 'i':
+                    modified = before(modified, cursor) + inst[1:] + after(modified, cursor)
+                    cursor += len(inst[1:])
+                elif inst[0] == 'm':
+                    cursor += int(inst[1:])
+                elif inst[0] == 'd':
+                    length = int(inst[1:])
+                    modified = before(modified, cursor) + after(modified, cursor+length)
+            return modified
+
+        def serialize(self) ->dict[str,Any]:
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "diff", "inst": self.instructions, "id": self.id}
+
+    types = {'set':SetChange, 'diff': DiffChange}
+
 
 class IntChangeTypes:
     class SetChange(SetChange):
