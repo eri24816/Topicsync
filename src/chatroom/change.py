@@ -173,6 +173,14 @@ class StringChangeTypes:
         def serialize(self) ->dict[str,Any]:
             return {"topic_name": self.topic_name, "topic_type": "string", "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
 
+        def __eq__(self, other):
+            if not isinstance(other, StringChangeTypes.DeleteChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.position == other.position and \
+                self.deletion == other.deletion and \
+                self.id == other.id
+
     types = {'set':SetChange, 'insert': InsertChange, 'delete': DeleteChange}
 
 
