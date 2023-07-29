@@ -1,6 +1,6 @@
 import unittest
 from chatroom.topic import StringTopic
-from chatroom.change import StringChangeTypes
+from chatroom.change import StringChangeTypes, InvalidChangeError
 
 class TestStringDiffChange(unittest.TestCase):
     def test_insert_change(self):
@@ -14,6 +14,12 @@ class TestStringDiffChange(unittest.TestCase):
         topic = StringTopic('test', None, init_value='abcd')
         deletion = StringChangeTypes.DeleteChange('test', 2, 'cd')
         topic.apply_change(deletion)
+
+    def test_delete_exception(self):
+        topic = StringTopic('test', None, init_value='abcd')
+        deletion = StringChangeTypes.DeleteChange('test', 0, 'cd')
+        with self.assertRaises(InvalidChangeError):
+            topic.apply_change(deletion)
 
     # def test_change_adjust(self):
     #     topic = StringTopic('test', None, init_value='')  # no need to use state machine
