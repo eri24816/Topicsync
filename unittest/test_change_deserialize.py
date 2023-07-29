@@ -15,7 +15,10 @@ class TestChangeDeserialize(unittest.TestCase):
         change = GenericChangeTypes.SetChange('topic', 0, 1)
         self._test_deserializable(change)
 
-    # TODO: new string change
+    def test_string_insert(self):
+        change = StringChangeTypes.InsertChange('topic', 10, 'abc')
+        self._test_deserializable(change)
+
     def test_string_set(self):
         change = StringChangeTypes.SetChange('topic', 'val', 'oval')
         self._test_deserializable(change)

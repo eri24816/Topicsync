@@ -2,16 +2,13 @@ import unittest
 from chatroom.topic import StringTopic
 from chatroom.change import StringChangeTypes
 
-class TestStringChange(unittest.TestCase):
-    def test_diff_change(self):
+class TestStringDiffChange(unittest.TestCase):
+    def test_insert_change(self):
         topic = StringTopic('test', None, init_value='ddd')
-        diff_change = StringChangeTypes.DiffChange(
-            'test',
-            inst=['iabcb', 'm1', 'd2']
-        )
-        topic.apply_change(diff_change, notify_listeners=False)
+        insertion = StringChangeTypes.InsertChange('test', 1, 'abcd')
+        topic.apply_change(insertion, notify_listeners=False)
 
-        assert topic.get() == 'abcbd'
+        assert topic.get() == 'dabcddd'
 
     # def test_change_adjust(self):
     #     topic = StringTopic('test', None, init_value='')  # no need to use state machine
