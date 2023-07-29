@@ -119,25 +119,25 @@ class StringChangeTypes:
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
     class InsertChange(Change):
-        def __init__(self, topic_name: str, position: int, inserted: str, id: Optional[str]=None):
+        def __init__(self, topic_name: str, position: int, insertion: str, id: Optional[str]=None):
             super().__init__(topic_name, id)
             self.position = position
-            self.insertion = inserted
+            self.insertion = insertion
 
         def apply(self, old_value):
             # cursor stands between characters, it doesn't directly refer to a character
             # 0 is the first insertable position, right before the first character
             # here we have a rule to help thinking: the ith cursor positions before the ith character
-            def before(string, cursor):
+            def before(string, cursor) -> str:
                 return string[:cursor]
 
-            def after(string, cursor):
+            def after(string, cursor) -> str:
                 return string[cursor:]
 
             return before(old_value, self.position) + self.insertion + after(old_value, self.position)
 
         def serialize(self) ->dict[str,Any]:
-            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "position": self.position, "inserted": self.insertion, "id": self.id}
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "position": self.position, "insertion": self.insertion, "id": self.id}
 
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.InsertChange):
@@ -147,7 +147,33 @@ class StringChangeTypes:
                 self.insertion == other.insertion and \
                 self.id == other.id
 
-    types = {'set':SetChange, 'insert': InsertChange}
+    class DeleteChange(Change):
+        def __init__(self, topic_name: str, position: int, deletion: str, id: Optional[str]=None):
+            super().__init__(topic_name, id)
+            self.position = position
+            self.deletion = deletion
+
+        def apply(self, old_value):
+            # cursor stands between characters, it doesn't directly refer to a character
+            # 0 is the first insertable position, right before the first character
+            # here we have a rule to help thinking: the ith cursor positions before the ith character
+            def before(string, cursor) -> str:
+                return string[:cursor]
+
+            def after(string, cursor) -> str:
+                return string[cursor:]
+
+            if not after(old_value, self.position).startswith(self.deletion):
+                raise InvalidChangeError(
+                    self,
+                    f"Deletion invalid: string '{self.deletion}' doesn't appear at position {self.position} of string '{old_value}'")
+
+            return before(old_value, self.position) + after(old_value, self.position + len(self.deletion))
+
+        def serialize(self) ->dict[str,Any]:
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
+
+    types = {'set':SetChange, 'insert': InsertChange, 'delete': DeleteChange}
 
 
 class IntChangeTypes:

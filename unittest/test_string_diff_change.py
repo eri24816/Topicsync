@@ -10,6 +10,11 @@ class TestStringDiffChange(unittest.TestCase):
 
         assert topic.get() == 'dabcddd'
 
+    def test_delete_change(self):
+        topic = StringTopic('test', None, init_value='abcd')
+        deletion = StringChangeTypes.DeleteChange('test', 2, 'cd')
+        topic.apply_change(deletion)
+
     # def test_change_adjust(self):
     #     topic = StringTopic('test', None, init_value='')  # no need to use state machine
     #     topic.set()
