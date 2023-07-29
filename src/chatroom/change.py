@@ -134,6 +134,9 @@ class StringChangeTypes:
             def after(string, cursor) -> str:
                 return string[cursor:]
 
+            if self.position > len(old_value) or self.position < 0:
+                raise InvalidChangeError(self, f'Insertion invalid: invalid position {self.position}')
+
             return before(old_value, self.position) + self.insertion + after(old_value, self.position)
 
         def serialize(self) ->dict[str,Any]:
@@ -162,6 +165,9 @@ class StringChangeTypes:
 
             def after(string, cursor) -> str:
                 return string[cursor:]
+
+            if self.position > len(old_value) or self.position < 0:
+                raise InvalidChangeError(self, f'Deletion invalid: invalid position {self.position}')
 
             if not after(old_value, self.position).startswith(self.deletion):
                 raise InvalidChangeError(
