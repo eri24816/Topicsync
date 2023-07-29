@@ -173,7 +173,7 @@ class StringTopic(Topic):
         self.apply_change_external(change)
 
     def set_from_binary(self, data):
-        b64 = base64.b64encode(data)
+        b64 = base64.b64encode(data).decode('utf-8')
         self.set(b64)
 
     def to_binary(self):

@@ -69,20 +69,23 @@ class ClientManager:
 
             async for message in ws:
                 logger.debug(f"> {message[:100]}")
+
                 message_type, args = parse_message(message)
-                if message_type in self._message_handlers:
+                if message_type not in self._message_handlers:
+                    logger.error(f"Unknown message type: {message_type}")
+                    continue
+
+                try:
                     return_value = self._message_handlers[message_type](sender = client,**args)
                     if isinstance(return_value,Awaitable):
                         await return_value
-                else:
-                    logger.error(f"Unknown message type: {message_type}")
-                    pass
+                except Exception as e:
+                    logger.warn(f"Error handling message {message_type}:\n{traceback.format_exc()}")
+                    #TODO: send error message to client
+                    continue
 
         except ConnectionClosed as e:
             logger.info(f"Client {client_id} disconnected: {repr(e)}")
-            self._cleanup_client(client)
-        except Exception as e:
-            logger.error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
             self._cleanup_client(client)
 
     def send_update(self,changes:List[Change],action_id:str):
