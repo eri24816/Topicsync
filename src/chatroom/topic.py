@@ -5,7 +5,7 @@ import copy
 import json
 import logging
 logger = logging.getLogger(__name__)
-from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, List, TypeVar, Iterator, Dict
 from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
@@ -165,6 +165,23 @@ class StringTopic(Topic):
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(str))
+
+        self.version = f"{name}_init"
+        self.version_to_index: Dict[str, int] = {f"{name}_init": -1}
+        self.changes: List[Change] = []
+
+    def _validate_change_and_get_result(self,change:Change):
+        change.sync_topic_version(self.version, self)
+        self.version_to_index[change.id] = len(self.changes)
+        self.changes.append(change)
+        self.version = change.id
+        return super()._validate_change_and_get_result(change)
+
+    def changes_from(self, version: str) -> Iterator[Change]:
+        '''
+        This method will throw if version isn't valid (isn't recorded by the topic)
+        '''
+        return self.changes[self.version_to_index[version] + 1:]
     
     def set(self, value):
         if value == self._value:

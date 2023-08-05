@@ -5,7 +5,7 @@ import copy
 from chatroom.utils import IdGenerator
 
 if TYPE_CHECKING:
-    from chatroom.topic import Topic
+    from chatroom.topic import Topic, StringTopic
 '''
 Change is a class that represents a change to a topic. It can be serialized and be passed between clients and the server.
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).
@@ -115,14 +115,47 @@ class GenericChangeTypes:
 
 class StringChangeTypes:
     class SetChange(SetChange):
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            pass
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
     class InsertChange(Change):
-        def __init__(self, topic_name: str, position: int, insertion: str, id: Optional[str]=None):
+        def __init__(self, topic_name: str, topic_version: str, position: int, insertion: str, id: Optional[str]=None):
             super().__init__(topic_name, id)
             self.position = position
             self.insertion = insertion
+            self.topic_version = topic_version
+
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            if self.topic_version == current_version:
+                return self
+
+            try:
+                changes = topic.changes_from(self.topic_version)
+            except:
+                raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
+
+            for change in changes:
+                if isinstance(change, StringChangeTypes.SetChange):
+                    # view it as delete all and insert all, the cursor should be at the beginning
+                    self.position = 0
+                else:
+                    self._adjust(change)
+            self.topic_version = current_version
+
+        def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
+            # we use a simple behavior on cursor movement:
+            # only insert/delete before (exclusive) the cursor will affect the cursor position
+            # this is also used by google docs and hackmd
+            if isinstance(change, StringChangeTypes.InsertChange):
+                ins_pos = change.position
+                if ins_pos < self.position:
+                    self.position += len(change.insertion)
+            else:
+                for del_pos, deletion in change.deletions():
+                    if del_pos < self.position:
+                        self.position -= min(len(change.deletion), self.position - del_pos)
 
         def apply(self, old_value):
             # cursor stands between characters, it doesn't directly refer to a character
@@ -140,7 +173,7 @@ class StringChangeTypes:
             return before(old_value, self.position) + self.insertion + after(old_value, self.position)
 
         def serialize(self) ->dict[str,Any]:
-            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "position": self.position, "insertion": self.insertion, "id": self.id}
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": {self.topic_version}, "position": self.position, "insertion": self.insertion, "id": self.id}
 
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.InsertChange):
@@ -155,6 +188,9 @@ class StringChangeTypes:
             super().__init__(topic_name, id)
             self.position = position
             self.deletion = deletion
+
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            pass
 
         def apply(self, old_value):
             # cursor stands between characters, it doesn't directly refer to a character
