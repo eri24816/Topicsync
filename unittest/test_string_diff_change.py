@@ -29,6 +29,8 @@ class TestStringDiffChange(unittest.TestCase):
         deletion = StringChangeTypes.DeleteChange('test', 2, 'cd')
         topic.apply_change(deletion)
 
+        assert topic.get() == 'ab'
+
     def test_delete_invalid_string(self):
         topic = StringTopic('test', None, init_value='abcd')
         deletion = StringChangeTypes.DeleteChange('test', 0, 'cd')
@@ -48,6 +50,22 @@ class TestStringDiffChange(unittest.TestCase):
 
         with self.assertRaises(InvalidChangeError):
             topic.apply_change(deletion, notify_listeners=False)
+
+    def test_delete_last_position_empty_string(self):
+        topic = StringTopic('test', None, init_value='ddd')
+        deletion = StringChangeTypes.DeleteChange('test', 3, '')
+
+        with self.assertRaises(InvalidChangeError):
+            topic.apply_change(deletion, notify_listeners=False)
+
+    def test_delete_last_position_nonempty_string(self):
+        topic = StringTopic('test', None, init_value='ddd')
+        deletion = StringChangeTypes.DeleteChange('test', 3, 'd')
+
+        topic.apply_change(deletion)
+
+        assert topic.get() == 'ddd'
+
 
     def test_multiple_insert(self):
         topic = StringTopic('test', None, init_value='abcd')
