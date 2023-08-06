@@ -55,16 +55,16 @@ class TestStringDiffChange(unittest.TestCase):
         topic = StringTopic('test', None, init_value='ddd')
         deletion = StringChangeTypes.DeleteChange('test', 3, '')
 
-        with self.assertRaises(InvalidChangeError):
-            topic.apply_change(deletion, notify_listeners=False)
+        topic.apply_change(deletion)
+
+        assert topic.get() == 'ddd'
 
     def test_delete_last_position_nonempty_string(self):
         topic = StringTopic('test', None, init_value='ddd')
         deletion = StringChangeTypes.DeleteChange('test', 3, 'd')
 
-        topic.apply_change(deletion)
-
-        assert topic.get() == 'ddd'
+        with self.assertRaises(InvalidChangeError):
+            topic.apply_change(deletion, notify_listeners=False)
 
 
     def test_multiple_insert(self):

@@ -19,7 +19,6 @@ def insert(old: str, pos: int, string: str) -> str:
 
 
 def delete(old: str, pos: int, string: str) -> str:
-    # TODO: test delete at position len(old)
     if pos not in _valid_pos(old):
         raise ValueError(f'Deletion invalid: invalid position {pos}. Delete position must between [0, len(old)]')
 
