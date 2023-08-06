@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 import copy
 
 from chatroom.utils import IdGenerator
+from chatroom.string_diff import insert, delete
 
 if TYPE_CHECKING:
     from chatroom.topic import Topic, StringTopic
@@ -158,19 +159,10 @@ class StringChangeTypes:
                         self.position -= min(len(change.deletion), self.position - del_pos)
 
         def apply(self, old_value):
-            # cursor stands between characters, it doesn't directly refer to a character
-            # 0 is the first insertable position, right before the first character
-            # here we have a rule to help thinking: the ith cursor positions before the ith character
-            def before(string, cursor) -> str:
-                return string[:cursor]
-
-            def after(string, cursor) -> str:
-                return string[cursor:]
-
-            if self.position > len(old_value) or self.position < 0:
-                raise InvalidChangeError(self, f'Insertion invalid: invalid position {self.position}')
-
-            return before(old_value, self.position) + self.insertion + after(old_value, self.position)
+            try:
+                return insert(old_value, self.position, self.insertion)
+            except ValueError as e:
+                raise InvalidChangeError(self, e.args[0]) from e
 
         def serialize(self) ->dict[str,Any]:
             return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": {self.topic_version}, "position": self.position, "insertion": self.insertion, "id": self.id}
@@ -193,24 +185,10 @@ class StringChangeTypes:
             pass
 
         def apply(self, old_value):
-            # cursor stands between characters, it doesn't directly refer to a character
-            # 0 is the first insertable position, right before the first character
-            # here we have a rule to help thinking: the ith cursor positions before the ith character
-            def before(string, cursor) -> str:
-                return string[:cursor]
-
-            def after(string, cursor) -> str:
-                return string[cursor:]
-
-            if self.position > len(old_value) or self.position < 0:
-                raise InvalidChangeError(self, f'Deletion invalid: invalid position {self.position}')
-
-            if not after(old_value, self.position).startswith(self.deletion):
-                raise InvalidChangeError(
-                    self,
-                    f"Deletion invalid: string '{self.deletion}' doesn't appear at position {self.position} of string '{old_value}'")
-
-            return before(old_value, self.position) + after(old_value, self.position + len(self.deletion))
+            try:
+                return delete(old_value, self.position, self.deletion)
+            except ValueError as e:
+                raise InvalidChangeError(self, e.args[0]) from e
 
         def serialize(self) ->dict[str,Any]:
             return {"topic_name": self.topic_name, "topic_type": "string", "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
