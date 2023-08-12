@@ -1,6 +1,8 @@
 import unittest
 from chatroom.topic import StringTopic
-from chatroom.change import StringChangeTypes, InvalidChangeError
+from chatroom.change import StringChangeTypes, InvalidChangeError, Change
+
+from typing import Callable, Tuple
 
 class TestStringDiffChange(unittest.TestCase):
     def test_insert_change(self):
@@ -67,27 +69,35 @@ class TestStringDiffChange(unittest.TestCase):
             topic.apply_change(deletion, notify_listeners=False)
 
 
+    def _test_2_change_order(self, result12, result21, topic_change_gen: Callable[[], Tuple[StringTopic, Change, Change]]):
+        topic, change1, change2 = topic_change_gen()
+        topic.apply_change(change1)
+        topic.apply_change(change2)
+        assert topic.get() == result12
+
+        topic, change1, change2 = topic_change_gen()
+        topic.apply_change(change2)
+        topic.apply_change(change1)
+        assert topic.get() == result21
+
     def test_multiple_insert(self):
-        topic = StringTopic('test', None, init_value='abcd')
+        # the order of insertions on different position won't affect the result
+        self._test_2_change_order(
+            'axxxxbcyyyyd',
+            'axxxxbcyyyyd',
+            lambda: (topic := StringTopic('test', None, init_value='abcd'),
+                     StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx'),
+                     StringChangeTypes.InsertChange('test', topic.version, 3, 'yyyy'))
+        )
 
-        # imagine 2 cursors, insert at the same time
-        ins1 = StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx')
-        ins2 = StringChangeTypes.InsertChange('test', topic.version, 3, 'yyyy')
-        topic.apply_change(ins1)
-        topic.apply_change(ins2)
-
-        assert topic.get() == 'axxxxbcyyyyd'
-
-        topic = StringTopic('test', None, init_value='abcd')
-
-        # the result should be the same even if the change is applied in a different order
-        # because the changes are both made base on the string 'abcd'
-        ins1 = StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx')
-        ins2 = StringChangeTypes.InsertChange('test', topic.version, 3, 'yyyy')
-        topic.apply_change(ins2)
-        topic.apply_change(ins1)
-
-        assert topic.get() == 'axxxxbcyyyyd'
+    def test_multiple_insert_at_same_position(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'axxxxyyyybcd',
+            lambda: (topic := StringTopic('test', None, init_value='abcd'),
+                     StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx'),
+                     StringChangeTypes.InsertChange('test', topic.version, 1, 'yyyy'))
+        )
 
     # def test_change_adjust(self):
     #     topic = StringTopic('test', None, init_value='')  # no need to use state machine
