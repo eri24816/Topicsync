@@ -1,5 +1,5 @@
 import unittest
-from chatroom.state_machine import StateMachine
+from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic import EventTopic, StringTopic
 
 # class StateMachineTransition(unittest.TestCase):

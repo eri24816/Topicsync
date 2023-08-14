@@ -1,6 +1,6 @@
 import unittest
-from chatroom import state_machine
-from chatroom.state_machine import StateMachine
+from chatroom.state_machine import state_machine
+from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic import EventTopic, StringTopic
 from chatroom.change import InvalidChangeError
 

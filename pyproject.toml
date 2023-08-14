@@ -3,6 +3,10 @@ name = "chatroom"
 version = "0.5.3"
 description = ""
 authors = ["peterxcli <peterxcli@gmail.com>"]
+packages = [
+    { include = "chatroom", from = "src" },
+    { include = "chatroom_debugger", from = "src" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

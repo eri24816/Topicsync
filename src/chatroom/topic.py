@@ -12,7 +12,7 @@ import abc
 import pickle
 
 if TYPE_CHECKING:
-    from chatroom.state_machine import StateMachine
+    from chatroom.state_machine.state_machine import StateMachine
 
 def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None) -> Topic:
     '''
