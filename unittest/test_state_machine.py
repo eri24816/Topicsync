@@ -8,7 +8,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_simple_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         with machine.record():
@@ -22,7 +22,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_chain(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -38,7 +38,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -64,7 +64,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_and_catched_tranition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -92,7 +92,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_prevent_recursive_change(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -109,7 +109,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_set_without_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         b.add_validator(lambda old,new,change: False)
@@ -124,7 +124,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_set_with_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -144,7 +144,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_try_except_in_on_set(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -169,7 +169,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_subtrees(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -196,7 +196,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_subtrees_2(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -228,7 +228,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_recreate_topic(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
     
         machine.remove_topic('a')
@@ -244,7 +244,7 @@ from chatroom import HistoryManager
 class UndoRedo(unittest.TestCase):
     def test_undo_redo(self):
         history = HistoryManager()
-        machine = StateMachine(on_transition_done=history.add_transition)
+        machine = StateMachine(transition_callback=history.add_transition)
         history.set_server(machine)
 
         a=machine.add_topic('a',StringTopic)
@@ -292,7 +292,7 @@ class UndoRedo(unittest.TestCase):
 
     def test_undo_redo_2(self):
         history = HistoryManager()
-        machine = StateMachine(on_transition_done=history.add_transition)
+        machine = StateMachine(transition_callback=history.add_transition)
         history.set_server(machine)
 
         a=machine.add_topic('a',StringTopic)
@@ -337,7 +337,7 @@ class RunAfterTransition(unittest.TestCase):
     def test_run_after_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic,init_value=' world')
         e=machine.add_topic('e',EventTopic)

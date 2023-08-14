@@ -6,7 +6,7 @@ from chatroom.topic import EventTopic, StringTopic
 #     def test_simple_transition(self):
 #         changes_list = []
 #         transition_list = []
-#         machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+#         machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
 #         a=machine.add_topic('a',StringTopic)
 #         b=machine.add_topic('b',StringTopic)
 #         with machine.record():
@@ -21,7 +21,7 @@ class Test(unittest.TestCase):
     def test_simple_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic,init_value=' world')
         e=machine.add_topic('e',EventTopic)
