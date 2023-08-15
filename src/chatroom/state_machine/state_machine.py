@@ -1,4 +1,5 @@
 from __future__ import annotations
+from doctest import debug
 import enum
 import logging
 
@@ -105,31 +106,20 @@ class StateMachine:
             self._phase = phase
             self._error_has_occured_in_transition = False
             self._changes_list = []
-            self._transition_tree = TransitionTree(self.get_topic,self._changes_list)
             self._changes_tree = ChangesTree()
+            self._transition_tree = TransitionTree(self.get_topic,self._changes_list,self._changes_tree)
             try:
                 yield
             except Exception:
-                self._is_recording = False
                 logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
                 self._cleanup_failed_transition()
                 raise
             else:
-                self._is_recording = False
                 current_transition = list(self._transition_tree.preorder_traversal(self._transition_tree.root))
                 if len(current_transition) and emit_transition:
                     new_transition = Transition(current_transition,action_source)
                     self._transition_callback(new_transition)
             finally:
-                self._is_recording = False
-                self._phase = Phase.IDLE
-                # discard NullChange, EmitChange, ReversedEmitChange
-                self._changes_list = [
-                    change for change in self._changes_list
-                    if not isinstance(change,NullChange) and not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
-                if len(self._changes_list):
-                    self._changes_callback(self._changes_list,action_id)
-
                 # debug
 
                 if self._debug:
@@ -137,6 +127,14 @@ class StateMachine:
                         self._changes_tree_callback(self._changes_tree)
                     if self._transition_tree_callback is not None:
                         self._transition_tree_callback(self._transition_tree)
+                        
+                # discard NullChange, EmitChange, ReversedEmitChange
+                self._changes_list = [
+                    change for change in self._changes_list
+                    if not isinstance(change,NullChange) and not isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange))]
+                if len(self._changes_list):
+                    self._changes_callback(self._changes_list,action_id)
+
 
                 # cleanup
 
@@ -146,13 +144,15 @@ class StateMachine:
                 for task in self._tasks_to_run_after_transition:
                     task()
                 self._tasks_to_run_after_transition = []
+                
+                self._is_recording = False
+                self._phase = Phase.IDLE
 
         # unlock
 
     def _cleanup_failed_transition(self):
         try:
             with self._block_recursion():
-                assert self._transition_tree.cursor.is_root
                 self._transition_tree.clear_subtree()
         except Exception as e:
             logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" +str(traceback.format_exc()))
@@ -186,7 +186,7 @@ class StateMachine:
             # Within self._block_recursion context, recursive depth for stateful topics is limited
             if topic.is_stateful() and (not self._inside_emit_change) and len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
                 if self._debug:
-                    self._changes_tree.add_child_under_cursor(change,Tag.SKIPPED)
+                    self._changes_tree.add_child(change,Tag.SKIPPED)
                 return
             
             # Enter record context if not already in it
@@ -208,7 +208,7 @@ class StateMachine:
             if not topic.is_stateful() or self._inside_emit_change:
                 # simply notify listeners without handling recursive calls or errors
                 if self._debug:
-                    with self._changes_tree.add_child_under_cursor(change,Tag.NOT_RECORDED):
+                    with self._changes_tree.add_child_and_move_cursor(change,Tag.NOT_RECORDED):
                         topic.notify_listeners(change,old_value,new_value)
                 else:
                     topic.notify_listeners(change,old_value,new_value)
@@ -216,21 +216,23 @@ class StateMachine:
             
             
 
-            node = self._transition_tree.add_child_under_cursor(change)
+            node = self._transition_tree.add_child(change)
             with self._transition_tree.move_cursor(node):
-                with self._changes_tree.add_child_under_cursor(change,Tag.NORMAL) if self._debug else nullcontext(): # debug
+                with self._changes_tree.add_child_and_move_cursor(change,Tag.NORMAL) if self._debug else nullcontext(): # debug
                     try:
                         with self._track_apply_change(change.topic_name):
                             with self.enter_emit_change() if isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange)) else nullcontext():
                                 topic.notify_listeners(change,old_value,new_value)
                     except:
+                        if debug:
+                            self._changes_tree.cursor.tag = Tag.ERROR
                         # Undo the subtree of changes which was caused in consequence of this change
                         if self._inside_emit_change:
                             raise RuntimeError("An error has occured inside an event change. Please avoid that. The state is now in an inconsistent state. The error was: \n" + str(traceback.format_exc()))
                         if topic.is_stateful():
                             logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
-                            with self._block_recursion():
-                                self._transition_tree.clear_subtree()
+                            
+                            self._cleanup_failed_transition()
                         raise
 
 

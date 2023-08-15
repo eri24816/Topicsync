@@ -13,6 +13,8 @@ class Tag(Enum):
     NORMAL = 0
     SKIPPED = 1
     NOT_RECORDED = 2
+    ERROR = 3
+    INVERSED = 4
 
 class Node:
     def __init__(self,parent:'Node|RootNode',change:Change,tag:Tag):
@@ -49,11 +51,14 @@ class ChangesTree:
         self.cursor = self.root
 
     @contextmanager
-    def add_child_under_cursor(self,change:Change,tag:Tag=Tag.NORMAL):
-        node = Node(self.cursor,change,tag)
-        self.cursor.children.append(node)
+    def add_child_and_move_cursor(self,change:Change,tag:Tag=Tag.NORMAL):
+        node = self.add_child(change,tag)
         with self.move_cursor(node):
             yield node
+
+    def add_child(self,change:Change,tag:Tag=Tag.NORMAL):
+        node = Node(self.cursor,change,tag)
+        self.cursor.children.append(node)
         return node
         
     def preorder_traversal(self,root:Node|RootNode):

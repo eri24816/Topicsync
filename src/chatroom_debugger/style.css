@@ -11,12 +11,24 @@ body {
     text-align: center;
 }
 
-.tag-not_recorded{
+.tag-normal{
     background-color: #23366b;
 }
 
+.tag-not_recorded{
+    background-color: #444444;
+}
+
 .tag-skipped{
-    background-color: #5c2626;
+    background-color: #3d3922;
+}
+
+.tag-error{
+    background-color: rgb(72, 29, 29);
+}
+
+.tag-inversed{
+    background-color: #4c1e4f;
 }
 
 /*https://unpkg.com/treeflex/dist/css/treeflex.css*/

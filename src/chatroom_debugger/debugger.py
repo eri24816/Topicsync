@@ -3,10 +3,8 @@ import http
 import json
 from time import sleep
 import traceback
-import websockets
 from websockets.server import WebSocketServerProtocol, serve
 import asyncio
-from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler
 from os.path import join
 
 from chatroom.state_machine.changes_tree import ChangesTree
