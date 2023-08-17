@@ -113,9 +113,11 @@ class StateMachine:
             try:
                 yield
             except Exception:
-                if self._debug:
-                    if self._error_state == ErrorState.CRITICAL:
+                if self._error_state == ErrorState.CRITICAL:
+                    if self._debug:
                         self._changes_tree.root.tag = Tag.ERROR
+                else:
+                    self._try_recover()
                 raise
             else:
                 current_transition = list(self._transition_tree.preorder_traversal(self._transition_tree.root))
@@ -140,6 +142,8 @@ class StateMachine:
 
                 # cleanup
 
+                self._is_recording = False
+                self._phase = Phase.IDLE
                 self._changes_list = []
                 self._transition_tree = None
 
@@ -147,8 +151,6 @@ class StateMachine:
                     task()
                 self._tasks_to_run_after_transition = []
                 
-                self._is_recording = False
-                self._phase = Phase.IDLE
 
         # unlock
 
