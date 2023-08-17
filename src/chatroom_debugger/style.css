@@ -11,11 +11,11 @@ body {
     text-align: center;
 }
 
-.tag-normal{
+.tag-auto{
     background-color: #23366b;
 }
 
-.tag-not_recorded{
+.tag-manual{
     background-color: #444444;
 }
 

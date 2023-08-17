@@ -28,6 +28,15 @@ class Phase(enum.Enum):
     UNDOING = 2
     REDOING = 3
 
+class Mode(enum.Enum):
+    MANUAL = 0
+    AUTO = 1
+
+class ErrorState(enum.Enum):
+    NO_ERROR = 0
+    RECOVERING = 1
+    CRITICAL = 2
+
 
 
 class StateMachine:
@@ -39,6 +48,8 @@ class StateMachine:
         ):
 
         self._phase: Phase = Phase.IDLE
+        self._mode : Mode = Mode.MANUAL
+        self._error_state : ErrorState = ErrorState.NO_ERROR
         self._state : dict[str,Topic] = {}
         self._is_recording = False
         self._lock = threading.RLock()
@@ -54,8 +65,6 @@ class StateMachine:
         self._debug = changes_tree_callback is not None or transition_tree_callback is not None
 
         self._max_recursive_depth = 1e4
-        self._apply_change_call_stack = []
-        self._inside_emit_change = False
         self._transition_tree = None
         self._tasks_to_run_after_transition: List[Callable[[],None]] = []
     
@@ -80,14 +89,6 @@ class StateMachine:
         return topic_name in self._state
 
     @contextmanager
-    def _block_recursion(self,max_depth:int = 0):
-        self._max_recursive_depth = max_depth
-        try:
-            yield
-        finally:
-            self._max_recursive_depth = 1e4
-
-    @contextmanager
     def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True,phase:Phase = Phase.FORWARDING):
         #TODO: thread lock
         if self._is_recording:
@@ -104,15 +105,17 @@ class StateMachine:
 
             self._is_recording = True
             self._phase = phase
-            self._error_has_occured_in_transition = False
+            self._mode = Mode.AUTO
+            self._error_state = ErrorState.NO_ERROR
             self._changes_list = []
             self._changes_tree = ChangesTree()
             self._transition_tree = TransitionTree(self.get_topic,self._changes_list,self._changes_tree)
             try:
                 yield
             except Exception:
-                logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
-                self._cleanup_failed_transition()
+                if self._debug:
+                    if self._error_state == ErrorState.CRITICAL:
+                        self._changes_tree.root.tag = Tag.ERROR
                 raise
             else:
                 current_transition = list(self._transition_tree.preorder_traversal(self._transition_tree.root))
@@ -135,7 +138,6 @@ class StateMachine:
                 if len(self._changes_list):
                     self._changes_callback(self._changes_list,action_id)
 
-
                 # cleanup
 
                 self._changes_list = []
@@ -150,44 +152,38 @@ class StateMachine:
 
         # unlock
 
-    def _cleanup_failed_transition(self):
+    def _try_recover(self):
+        if self._error_state == ErrorState.CRITICAL:
+            # Can't recover from critical error
+            return
+        
+        assert self._error_state == ErrorState.NO_ERROR
+        
+        logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
+        self._error_state = ErrorState.RECOVERING
         try:
-            with self._block_recursion():
-                self._transition_tree.clear_subtree()
+            self._transition_tree.clear_subtree()
         except Exception as e:
             logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" +str(traceback.format_exc()))
+            self._error_state = ErrorState.CRITICAL
             raise
-
-    @contextmanager
-    def _track_apply_change(self,topic_name):
-        self._apply_change_call_stack.append(topic_name)
-        try:
-            yield
         finally:
-            self._apply_change_call_stack.pop()
+            self._error_state = ErrorState.NO_ERROR
 
     @contextmanager
-    def enter_emit_change(self):
-        if self._inside_emit_change:
+    def enter_manual_mode(self):
+        if self._mode == Mode.MANUAL:
             yield 
             return
-        self._inside_emit_change = True
+        self._mode = Mode.MANUAL
         try:
             yield
         finally:
-            self._inside_emit_change = False
+            self._mode = Mode.AUTO
 
     def apply_change(self,change:Change):
         
         with self._lock:
-
-            topic = self.get_topic(change.topic_name)
-
-            # Within self._block_recursion context, recursive depth for stateful topics is limited
-            if topic.is_stateful() and (not self._inside_emit_change) and len(self._apply_change_call_stack)+1 > self._max_recursive_depth:
-                if self._debug:
-                    self._changes_tree.add_child(change,Tag.SKIPPED)
-                return
             
             # Enter record context if not already in it
             if not self._is_recording:
@@ -201,38 +197,55 @@ class StateMachine:
             
             # Apply the change
 
-            old_value, new_value = topic.apply_change(change,notify_listeners=False)
+            topic = self.get_topic(change.topic_name)
+            old_value, new_value = topic.apply_change(change)
 
             self._changes_list.append(change)
 
-            if not topic.is_stateful() or self._inside_emit_change:
-                # simply notify listeners without handling recursive calls or errors
-                if self._debug:
-                    with self._changes_tree.add_child_and_move_cursor(change,Tag.NOT_RECORDED):
-                        topic.notify_listeners(change,old_value,new_value)
-                else:
-                    topic.notify_listeners(change,old_value,new_value)
-                return
+            if not topic.is_stateful() or self._mode == Mode.MANUAL:
+                # If the transition is in manual mode, notify listeners without recording the change
+                with self.enter_manual_mode():
+                    if self._debug:
+                        with self._changes_tree.add_child_and_move_cursor(change,Tag.MANUAL):
+                            topic.notify_listeners(False,change,old_value,new_value)
+                            topic.notify_listeners(True,change,old_value,new_value)
+                    else:
+                        topic.notify_listeners(False,change,old_value,new_value)
+                        topic.notify_listeners(True,change,old_value,new_value)
+                    return
             
-            
+
+            # If the transition is in auto mode, record the change and notify listeners
 
             node = self._transition_tree.add_child(change)
             with self._transition_tree.move_cursor(node):
-                with self._changes_tree.add_child_and_move_cursor(change,Tag.NORMAL) if self._debug else nullcontext(): # debug
+                with self._changes_tree.add_child_and_move_cursor(change,Tag.AUTO) if self._debug else nullcontext(): # debug
+                    
+                    # Notify listeners of manual mode
+                    with self.enter_manual_mode():
+                        try:
+                            topic.notify_listeners(False,change,old_value,new_value)
+                        except:
+                            if debug:
+                                self._changes_tree.cursor.tag = Tag.ERROR
+                            # Can't recover from manual mode
+                            self._error_state = ErrorState.CRITICAL
+                            logger.error("An error has occured while in manual mode. It can not be recovered. The error was: \n" +str(traceback.format_exc()))
+                            raise
+
+                    # When undoing or redoing, listeners of auto mode are not notified
+                    # When recovering from an error, listeners of auto mode are not notified
                     try:
-                        with self._track_apply_change(change.topic_name):
-                            with self.enter_emit_change() if isinstance(change,(EventChangeTypes.EmitChange,EventChangeTypes.ReversedEmitChange)) else nullcontext():
-                                topic.notify_listeners(change,old_value,new_value)
+                        if self._phase == Phase.FORWARDING and self._error_state == ErrorState.NO_ERROR: 
+                            # Notify listeners of auto mode
+                            topic.notify_listeners(True,change,old_value,new_value)
                     except:
                         if debug:
                             self._changes_tree.cursor.tag = Tag.ERROR
                         # Undo the subtree of changes which was caused in consequence of this change
-                        if self._inside_emit_change:
-                            raise RuntimeError("An error has occured inside an event change. Please avoid that. The state is now in an inconsistent state. The error was: \n" + str(traceback.format_exc()))
                         if topic.is_stateful():
-                            logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
-                            
-                            self._cleanup_failed_transition()
+                            if self._error_state == ErrorState.NO_ERROR:
+                                self._try_recover()
                         raise
 
 
@@ -240,23 +253,19 @@ class StateMachine:
         # Record the changes made by the undo
         # Undo should not be recorded as a transition
         with self.record(action_source=action_source,emit_transition=False,phase=Phase.UNDOING):
-            # Block recursive calls to change stateful topics. Only to undo the transition itself
-            with self._block_recursion(1):
-                # Revert the transition
-                for change in reversed(transition.changes):
-                    logger.debug("Undoing by change: " +str(change.inverse().serialize()))
-                    self.apply_change(change.inverse())
+            # Revert the transition
+            for change in reversed(transition.changes):
+                logger.debug("Undoing by change: " +str(change.inverse().serialize()))
+                self.apply_change(change.inverse())
     
     def redo(self, transition: Transition):
         # Record the changes made by the redo
         # Redo should not be recorded as a transition
         with self.record(emit_transition=False,phase=Phase.REDOING):
-            # Block recursive calls to change stateful topics. Only to redo the transition itself
-            with self._block_recursion(1):
-                # Revert the transition
-                for change in transition.changes:
-                    logger.debug("Redoing change: " +str(change.serialize()))
-                    self.apply_change(change)
+            # Revert the transition
+            for change in transition.changes:
+                logger.debug("Redoing change: " +str(change.serialize()))
+                self.apply_change(change)
 
     def do_after_transition(self,task): #TODO: thread safety?
         '''

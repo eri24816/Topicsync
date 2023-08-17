@@ -26,7 +26,9 @@ class Node:
             topic,inv_change = self.get_topic(self.change.topic_name),self.change.inverse()
 
             with self.changes_tree.add_child_and_move_cursor(inv_change,Tag.INVERSED):
-                topic.apply_change(inv_change)
+                old, new = topic.apply_change(inv_change)
+                # Invoke the listeners of manual mode only
+                topic.notify_listeners(False,inv_change,old, new)
 
             self.changes_list.append(inv_change)
             self.parent.children.remove(self)

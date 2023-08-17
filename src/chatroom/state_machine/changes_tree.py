@@ -10,9 +10,9 @@ from chatroom.change import Change
 from chatroom.topic import Topic
 
 class Tag(Enum):
-    NORMAL = 0
+    AUTO = 0
     SKIPPED = 1
-    NOT_RECORDED = 2
+    MANUAL = 2
     ERROR = 3
     INVERSED = 4
 
@@ -37,11 +37,13 @@ class RootNode(Node):
     def __init__(self):
         self.is_root = True
         self.children : List[Node] = []
+        self.tag = Tag.AUTO
 
     def serialize(self):
         return {
             'name':'',
-            'children':[c.serialize() for c in self.children]
+            'children':[c.serialize() for c in self.children],
+            'tag':self.tag.name
         }
 
 
@@ -51,12 +53,12 @@ class ChangesTree:
         self.cursor = self.root
 
     @contextmanager
-    def add_child_and_move_cursor(self,change:Change,tag:Tag=Tag.NORMAL):
+    def add_child_and_move_cursor(self,change:Change,tag:Tag=Tag.AUTO):
         node = self.add_child(change,tag)
         with self.move_cursor(node):
             yield node
 
-    def add_child(self,change:Change,tag:Tag=Tag.NORMAL):
+    def add_child(self,change:Change,tag:Tag=Tag.AUTO):
         node = Node(self.cursor,change,tag)
         self.cursor.children.append(node)
         return node

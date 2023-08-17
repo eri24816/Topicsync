@@ -41,21 +41,63 @@ class Action:
     A hub for callbacks
     '''
     def __init__(self):
-        self._callbacks:List[Callable] = []
+        self._auto_callbacks:List[Callable] = []
+        self._manual_callbacks:List[Callable] = []
+        self._raw_callbacks:List[Callable] = []
+        self.num_callbacks = 0
 
     def __add__(self,callback:Callable):
-        self._callbacks.append(callback)
+        '''
+        Temporary backward compatibility. To be removed.
+        '''
+        self.add(callback) 
         return self
     
     def __sub__(self,callback:Callable):
-        self._callbacks.remove(callback)
+        '''
+        Temporary backward compatibility. To be removed.
+        '''
+        self.remove(callback)
         return self
     
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def add(self,callback:Callable,auto=False):
+        if auto:
+            self._auto_callbacks.append(callback)
+        else:
+            self._manual_callbacks.append(callback)
+        self.num_callbacks += 1
+
+    def add_manual(self,callback:Callable):
+        self._manual_callbacks.append(callback)
+        self.num_callbacks += 1
+
+    def add_auto(self,callback:Callable):
+        self._auto_callbacks.append(callback)
+        self.num_callbacks += 1
+
+    def add_raw(self,callback:Callable):
+        self._raw_callbacks.append(callback)
+        self.num_callbacks += 1
+
+    def remove(self,callback:Callable):
+        if callback in self._manual_callbacks:
+            self._manual_callbacks.remove(callback)
+        elif callback in self._auto_callbacks:
+            self._auto_callbacks.remove(callback)
+        elif callback in self._raw_callbacks:
+            self._raw_callbacks.remove(callback)
+        else:
+            raise ValueError("Callback not found")
+        self.num_callbacks -= 1
+    
+    def invoke(self, auto, *args: Any, **kwargs: Any) -> Any:
         '''Call each callback in the action with the given arguments.'''
         returns = []
-        for callback in self._callbacks:
+        callback_list = self._auto_callbacks if auto else self._manual_callbacks
+        for callback in callback_list:
             returns.append(callback(*args,**kwargs))
+        for callback in self._raw_callbacks:
+            returns.append(callback(auto,*args,**kwargs))
         return returns
 
 import weakref
