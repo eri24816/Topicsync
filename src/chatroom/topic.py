@@ -254,6 +254,13 @@ class SetTopic(Topic):
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
             
 class ListTopic(Topic):
+    @staticmethod
+    def unique_validator(old_value,new_value,change):
+        '''
+        Validator that prevents the list from having repeated items.
+        '''
+        return len(set(new_value)) == len(new_value)
+
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(list))
@@ -335,6 +342,12 @@ class DictTopic(Topic):
         change = DictChangeTypes.RemoveChange(self._name,key)
         self.apply_change_external(change)
 
+    def pop(self, key):
+        temp = self._value[key]
+        change = DictChangeTypes.RemoveChange(self._name,key)
+        self.apply_change_external(change)
+        return temp
+
     def change_value(self, key, value):
         change = DictChangeTypes.ChangeValueChange(self._name,key,value)
         self.apply_change_external(change)
@@ -407,8 +420,9 @@ class EventTopic(Topic):
                 args = merge_dicts(change.args,change.forward_info)
                 forward_info_list = self.on_emit.invoke(auto,**args)
                 if len(forward_info_list)>0 and forward_info_list[0] is not None:
-                    assert isinstance(forward_info_list[0],dict) # forward_info must be a dict
-                    change.forward_info = forward_info_list[0]
+                    if isinstance(forward_info_list[0],dict):
+                        change.forward_info = forward_info_list[0]
+                        
             case EventChangeTypes.ReversedEmitChange():
                 args = merge_dicts(change.args,change.forward_info)
                 self.on_reverse.invoke(auto,**args)

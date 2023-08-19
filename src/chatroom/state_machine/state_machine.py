@@ -174,14 +174,15 @@ class StateMachine:
 
     @contextmanager
     def enter_manual_mode(self):
-        if self._mode == Mode.MANUAL:
-            yield 
-            return
+        original_mode = self._mode
         self._mode = Mode.MANUAL
         try:
             yield
+        except:
+            self._changes_tree.cursor.tag = Tag.ERROR
+            raise
         finally:
-            self._mode = Mode.AUTO
+            self._mode = original_mode
 
     def apply_change(self,change:Change):
         
