@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chatroom"
-version = "0.6.0"
+version = "0.6.1"
 description = ""
 authors = ["peterxcli <peterxcli@gmail.com>"]
 packages = [

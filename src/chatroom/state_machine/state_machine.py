@@ -205,7 +205,18 @@ class StateMachine:
 
             self._changes_list.append(change)
 
-            if not topic.is_stateful() or self._mode == Mode.MANUAL:
+            if not topic.is_stateful():
+                # Just notifying listeners and return
+                if self._debug:
+                    with self._changes_tree.add_child_and_move_cursor(change,Tag.MANUAL):
+                        topic.notify_listeners(False,change,old_value,new_value)
+                        topic.notify_listeners(True,change,old_value,new_value)
+                else:
+                    topic.notify_listeners(False,change,old_value,new_value)
+                    topic.notify_listeners(True,change,old_value,new_value)
+                return
+
+            if self._mode == Mode.MANUAL:
                 # If the transition is in manual mode, notify listeners without recording the change
                 with self.enter_manual_mode():
                     if self._debug:
