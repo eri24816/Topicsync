@@ -28,34 +28,34 @@ class TestStringDiffChange(unittest.TestCase):
 
     def test_delete_change(self):
         topic = StringTopic('test', None, init_value='abcd')
-        deletion = StringChangeTypes.DeleteChange('test', 2, 'cd')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, 2, 'cd')
         topic.apply_change(deletion)
 
         assert topic.get() == 'ab'
 
     def test_delete_invalid_string(self):
         topic = StringTopic('test', None, init_value='abcd')
-        deletion = StringChangeTypes.DeleteChange('test', 0, 'cd')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, 0, 'cd')
         with self.assertRaises(InvalidChangeError):
             topic.apply_change(deletion)
 
     def test_delete_position_greater_than_length(self):
         topic = StringTopic('test', None, init_value='ddd')
-        deletion = StringChangeTypes.DeleteChange('test', 4, 'abcd')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, 4, 'abcd')
 
         with self.assertRaises(InvalidChangeError):
             topic.apply_change(deletion, notify_listeners=False)
 
     def test_delete_position_less_than_zero(self):
         topic = StringTopic('test', None, init_value='ddd')
-        deletion = StringChangeTypes.DeleteChange('test', -2, 'd')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, -2, 'd')
 
         with self.assertRaises(InvalidChangeError):
             topic.apply_change(deletion, notify_listeners=False)
 
     def test_delete_last_position_empty_string(self):
         topic = StringTopic('test', None, init_value='ddd')
-        deletion = StringChangeTypes.DeleteChange('test', 3, '')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, 3, '')
 
         topic.apply_change(deletion)
 
@@ -63,40 +63,102 @@ class TestStringDiffChange(unittest.TestCase):
 
     def test_delete_last_position_nonempty_string(self):
         topic = StringTopic('test', None, init_value='ddd')
-        deletion = StringChangeTypes.DeleteChange('test', 3, 'd')
+        deletion = StringChangeTypes.DeleteChange('test', topic.version, 3, 'd')
 
         with self.assertRaises(InvalidChangeError):
             topic.apply_change(deletion, notify_listeners=False)
 
 
-    def _test_2_change_order(self, result12, result21, topic_change_gen: Callable[[], Tuple[StringTopic, Change, Change]]):
-        topic, change1, change2 = topic_change_gen()
+    def _test_2_change_order(self, original, result12, result21, topic_change_gen: Callable[[str, str], Tuple[Change, Change]]):
+        topic = StringTopic('test', None, init_value=original)
+        change1, change2 = topic_change_gen(topic.get_name(), topic.version)
         topic.apply_change(change1)
         topic.apply_change(change2)
         assert topic.get() == result12
 
-        topic, change1, change2 = topic_change_gen()
+        topic = StringTopic('test', None, init_value=original)
+        change1, change2 = topic_change_gen(topic.get_name(), topic.version)
         topic.apply_change(change2)
         topic.apply_change(change1)
         assert topic.get() == result21
 
-    def test_multiple_insert(self):
+    def test_2_insert(self):
         # the order of insertions on different position won't affect the result
         self._test_2_change_order(
+            'abcd',
             'axxxxbcyyyyd',
             'axxxxbcyyyyd',
-            lambda: (topic := StringTopic('test', None, init_value='abcd'),
-                     StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx'),
-                     StringChangeTypes.InsertChange('test', topic.version, 3, 'yyyy'))
+            lambda name, version: (
+                 StringChangeTypes.InsertChange(name, version, 1, 'xxxx'),
+                 StringChangeTypes.InsertChange(name, version, 3, 'yyyy')
+            )
         )
 
-    def test_multiple_insert_at_same_position(self):
+    def test_2_insert_at_same_position(self):
+        # when insertion happens, the cursor on the same position isn't moved.
         self._test_2_change_order(
+            'abcd',
             'ayyyyxxxxbcd',
             'axxxxyyyybcd',
-            lambda: (topic := StringTopic('test', None, init_value='abcd'),
-                     StringChangeTypes.InsertChange('test', topic.version, 1, 'xxxx'),
-                     StringChangeTypes.InsertChange('test', topic.version, 1, 'yyyy'))
+            lambda name, version: (
+                 StringChangeTypes.InsertChange(name, version, 1, 'xxxx'),
+                 StringChangeTypes.InsertChange(name, version, 1, 'yyyy')
+            )
+        )
+
+    def test_2_delete_non_overlap(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'abcd',
+            'abcd',
+            lambda name, version: (
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyy'),
+                StringChangeTypes.DeleteChange(name, version, 5, 'xxxx')
+            )
+        )
+
+    def test_2_delete_same_pos(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'abcd',
+            'abcd',
+            lambda name, version: (
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyy'),
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyyxxxx')
+            )
+        )
+
+    def test_2_delete_identical(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'abcd',
+            'abcd',
+            lambda name, version: (
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyyxxxx'),
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyyxxxx')
+            )
+        )
+
+    def test_2_delete_overlap(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'abcd',
+            'abcd',
+            lambda name, version: (
+                StringChangeTypes.DeleteChange(name, version, 3, 'yyxxxx'),
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyyx')
+            )
+        )
+
+    def test_2_delete_subsequence(self):
+        self._test_2_change_order(
+            'ayyyyxxxxbcd',
+            'abcd',
+            'abcd',
+            lambda name, version: (
+                StringChangeTypes.DeleteChange(name, version, 1, 'yyyyxxxx'),
+                StringChangeTypes.DeleteChange(name, version, 3, 'yyxx')
+            )
         )
 
     # def test_change_adjust(self):

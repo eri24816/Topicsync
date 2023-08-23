@@ -20,7 +20,7 @@ class TestChangeDeserialize(unittest.TestCase):
         self._test_deserializable(change)
 
     def test_string_delete(self):
-        change = StringChangeTypes.DeleteChange('topic', 1, 'cc')
+        change = StringChangeTypes.DeleteChange('topic', 'v1', 1, 'cc')
         self._test_deserializable(change)
 
     def test_string_set(self):
