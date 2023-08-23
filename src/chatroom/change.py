@@ -150,6 +150,7 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
 
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
             # we use a simple behavior on cursor movement:
@@ -206,6 +207,7 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
 
 
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
