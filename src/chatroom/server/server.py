@@ -106,7 +106,7 @@ class ChatroomServer:
         self._services[service_name] = Service(callback,pass_sender)
 
     #TODO: allow specify auto/manual
-    def on(self, event_name: str, callback: Callable, inverse_callback: Callable|None = None, is_stateful: bool = True):
+    def on(self, event_name: str, callback: Callable, inverse_callback: Callable|None = None, is_stateful: bool = True,auto=False):
         """
         Register a callback for a event.
         The event can be triggered by the client or the server.
@@ -121,10 +121,10 @@ class ChatroomServer:
             self.add_topic(event_name,EventTopic,is_stateful=is_stateful)
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
-        topic.on_emit.add_manual(callback)
+        topic.on_emit.add(callback,auto=auto)
         if is_stateful:
             assert inverse_callback is not None
-            topic.on_reverse.add_manual(inverse_callback)
+            topic.on_reverse.add(inverse_callback,auto=auto)
 
     def emit(self, event_name: str, **args):
         """
