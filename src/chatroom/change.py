@@ -161,9 +161,9 @@ class StringChangeTypes:
                 if ins_pos < self.position:
                     self.position += len(change.insertion)
             else:
-                for del_pos, deletion in change.deletions():
-                    if del_pos < self.position:
-                        self.position -= min(len(change.deletion), self.position - del_pos)
+                # for del_pos, deletion in change.deletions():
+                if change.position < self.position:
+                    self.position -= min(len(change.deletion), self.position - change.position)
 
         def apply(self, old_value):
             try:
@@ -213,6 +213,10 @@ class StringChangeTypes:
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
             if isinstance(change, StringChangeTypes.DeleteChange):
                 self.position, self.deletion = adjust_delete(change.position, change.deletion, self.position, self.deletion)
+            elif isinstance(change, StringChangeTypes.InsertChange):
+                if change.position <= self.position:
+                    self.position += len(change.insertion)
+
 
         def apply(self, old_value):
             try:

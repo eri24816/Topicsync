@@ -161,6 +161,29 @@ class TestStringDiffChange(unittest.TestCase):
             )
         )
 
+    def test_insert_then_delete_non_overlap(self):
+        # insert happens at a position before delete range
+        self._test_2_change_order(
+            'axxxbcd',
+            'ayyyybcd',
+            'ayyyybcd',
+            lambda name, version: (
+                StringChangeTypes.InsertChange(name, version, 1, 'yyyy'),
+                StringChangeTypes.DeleteChange(name, version, 1, 'xxx')
+            )
+        )
+
+    def test_delete_then_insert_non_overlap(self):
+        # insert happens at a position after delete range
+        self._test_2_change_order(
+            'axxxbcd',
+            'ayyyybcd',
+            'ayyyybcd',
+            lambda name, version: (
+                StringChangeTypes.InsertChange(name, version, 4, 'yyyy'),
+                StringChangeTypes.DeleteChange(name, version, 1, 'xxx')
+            )
+        )
     # def test_change_adjust(self):
     #     topic = StringTopic('test', None, init_value='')  # no need to use state machine
     #     topic.set()
