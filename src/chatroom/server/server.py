@@ -4,17 +4,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 from websockets.server import serve as websockets_serve
-from chatroom import state_machine
+from chatroom.state_machine import state_machine
 
 from chatroom.server.client_manager import ClientManager, Client
 from chatroom.service import Service
-from chatroom.state_machine import StateMachine, Transition
+from chatroom.state_machine.state_machine import StateMachine, Transition
 from chatroom.topic import DictTopic, EventTopic, Topic, SetTopic
 from chatroom.change import Change
 
+from chatroom_debugger import Debugger
 
 class ChatroomServer:
-    def __init__(self, port: int, host:str='localhost',on_transition_done=lambda transition:None) -> None:
+    def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None) -> None:
         self._port = port
         self._host = host
         def get_value(topic_name):
@@ -26,7 +27,8 @@ class ChatroomServer:
         self.set_client_id_count = self._client_manager.set_client_id_count
         self.get_client_id_count = self._client_manager.get_client_id_count
         self._services: Dict[str, Service] = {}
-        self._state_machine = StateMachine(self._on_changes_made,on_transition_done)
+        self._debugger = Debugger(8800,'localhost')
+        self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree)
 
         self._topic_list = self._state_machine.add_topic("_chatroom/topic_list",DictTopic,is_stateful=True,init_value=
                                                          {'_chatroom/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
@@ -37,6 +39,7 @@ class ChatroomServer:
         self.record = self._state_machine.record
         self.do_after_transition = self._state_machine.do_after_transition
 
+
     async def serve(self):
         '''
         Entry point for the server
@@ -45,6 +48,7 @@ class ChatroomServer:
         self._client_manager.register_message_handler("action",self._handle_action)
         self._client_manager.register_message_handler("request",self._handle_request)
         await asyncio.gather(
+            self._debugger.run(),
             self._client_manager.run(),
             websockets_serve(self._client_manager.handle_client,self._host,self._port),
         )
@@ -53,7 +57,7 @@ class ChatroomServer:
     Callbacks
     """
 
-    def _on_changes_made(self, changes:List[Change],actionID:str):
+    def _changes_callback(self, changes:List[Change],actionID:str):
         self._client_manager.send_update(changes,actionID)
 
     def _add_topic_raw(self,topic_name,props):
@@ -101,7 +105,8 @@ class ChatroomServer:
         """
         self._services[service_name] = Service(callback,pass_sender)
 
-    def on(self, event_name: str, callback: Callable, inverse_callback: Callable|None = None, is_stateful: bool = True):
+    #TODO: allow specify auto/manual
+    def on(self, event_name: str, callback: Callable, inverse_callback: Callable|None = None, is_stateful: bool = True,auto=False):
         """
         Register a callback for a event.
         The event can be triggered by the client or the server.
@@ -116,10 +121,10 @@ class ChatroomServer:
             self.add_topic(event_name,EventTopic,is_stateful=is_stateful)
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
-        topic.on_emit += callback
+        topic.on_emit.add(callback,auto=auto)
         if is_stateful:
             assert inverse_callback is not None
-            topic.on_reverse += inverse_callback
+            topic.on_reverse.add(inverse_callback,auto=auto)
 
     def emit(self, event_name: str, **args):
         """

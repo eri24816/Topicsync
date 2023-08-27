@@ -12,7 +12,7 @@ import abc
 import pickle
 
 if TYPE_CHECKING:
-    from chatroom.state_machine import StateMachine
+    from chatroom.state_machine.state_machine import StateMachine
 
 def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None) -> Topic:
     '''
@@ -99,7 +99,7 @@ class Topic(metaclass = abc.ABCMeta):
     Called by the state machine
     '''
 
-    def apply_change(self, change:Change, notify_listeners:bool = True):
+    def apply_change(self, change:Change):
         '''
         Set the value and notify listeners. 
 
@@ -119,18 +119,9 @@ class Topic(metaclass = abc.ABCMeta):
         old_value = self._value
         new_value = self._validate_change_and_get_result(change)
         self._value = new_value
-
-
-
-        if notify_listeners:
-            try:
-                self.notify_listeners(change,old_value=old_value,new_value=self._value)
-            except:
-                self._value = old_value
-                raise
         return old_value,new_value
 
-    def notify_listeners(self,change:Change, old_value, new_value):
+    def notify_listeners(self,auto:bool,change:Change, old_value, new_value):
         '''
         Notify user-side listeners for a topic change. Every listener type work differently. Override this method in child classes to notify listeners of different types.
         
@@ -138,8 +129,8 @@ class Topic(metaclass = abc.ABCMeta):
 
         Override this method to notify listeners of different change types.
         '''
-        self.on_set(new_value)
-        self.on_set2(old_value, new_value)
+        self.on_set.invoke(auto,new_value)
+        self.on_set2.invoke(auto,old_value, new_value)
 
     def is_stateful(self):
         return self._is_stateful
@@ -260,8 +251,8 @@ class SetTopic(Topic):
     def __len__(self):
         return len(self._value)
 
-    def notify_listeners(self,change:Change, old_value:list, new_value:list):
-        super().notify_listeners(change,old_value,new_value)
+    def notify_listeners(self,auto:bool,change:Change, old_value:list, new_value:list):
+        super().notify_listeners(auto,change,old_value,new_value)
         match change:
             case SetChangeTypes.SetChange():
                 old_value_set = set(map(json.dumps,old_value))
@@ -269,17 +260,24 @@ class SetTopic(Topic):
                 removed_items = old_value_set - new_value_set
                 added_items = new_value_set - old_value_set
                 for item in removed_items:
-                    self.on_remove(json.loads(item))
+                    self.on_remove.invoke(auto,json.loads(item))
                 for item in added_items:
-                    self.on_append(json.loads(item))
+                    self.on_append.invoke(auto,json.loads(item))
             case SetChangeTypes.AppendChange():
-                self.on_append(change.item)
+                self.on_append.invoke(auto,change.item)
             case SetChangeTypes.RemoveChange():
-                self.on_remove(change.item)
+                self.on_remove.invoke(auto,change.item)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
             
 class ListTopic(Topic):
+    @staticmethod
+    def unique_validator(old_value,new_value,change):
+        '''
+        Validator that prevents the list from having repeated items.
+        '''
+        return len(set(new_value)) == len(new_value)
+
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
         super().__init__(name,state_machine,is_stateful,init_value)
         self.add_validator(type_validator(list))
@@ -321,19 +319,19 @@ class ListTopic(Topic):
     def __delitem__(self, position):
         self.pop(position)
     
-    def notify_listeners(self,change:Change, old_value:list, new_value:list):
-        super().notify_listeners(change,old_value,new_value)
+    def notify_listeners(self,auto:bool,change:Change, old_value:list, new_value:list):
+        super().notify_listeners(auto,change,old_value,new_value)
         match change:
             case ListChangeTypes.SetChange():
                 # pop all and insert all
                 for i,item in reversed(list(enumerate(old_value))):
-                    self.on_pop(item,i)
+                    self.on_pop.invoke(auto,item,i)
                 for i,item in enumerate(new_value):
-                    self.on_insert(item,i)
+                    self.on_insert.invoke(auto,item,i)
             case ListChangeTypes.InsertChange():
-                self.on_insert(change.item,change.position)
+                self.on_insert.invoke(auto,change.item,change.position)
             case ListChangeTypes.PopChange():
-                self.on_pop(change.item,change.position)
+                self.on_pop.invoke(auto,change.item,change.position)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
@@ -361,6 +359,12 @@ class DictTopic(Topic):
         change = DictChangeTypes.RemoveChange(self._name,key)
         self.apply_change_external(change)
 
+    def pop(self, key):
+        temp = self._value[key]
+        change = DictChangeTypes.RemoveChange(self._name,key)
+        self.apply_change_external(change)
+        return temp
+
     def change_value(self, key, value):
         change = DictChangeTypes.ChangeValueChange(self._name,key,value)
         self.apply_change_external(change)
@@ -374,8 +378,8 @@ class DictTopic(Topic):
     def __delitem__(self, key):
         self.remove(key)
 
-    def notify_listeners(self,change:Change, old_value:dict, new_value:dict):
-        super().notify_listeners(change,old_value,new_value)
+    def notify_listeners(self,auto:bool,change:Change, old_value:dict, new_value:dict):
+        super().notify_listeners(auto,change,old_value,new_value)
         match change:
             case DictChangeTypes.SetChange():
                 old_keys = set(old_value.keys())
@@ -384,18 +388,18 @@ class DictTopic(Topic):
                 added_keys = new_keys - old_keys
                 remained_keys = old_keys & new_keys
                 for key in removed_keys:
-                    self.on_remove(key)
+                    self.on_remove.invoke(auto,key)
                 for key in added_keys:
-                    self.on_add(key,new_value[key])
+                    self.on_add.invoke(auto,key,new_value[key])
                 for key in remained_keys:
                     if old_value[key] != new_value[key]:
-                        self.on_change_value(key,new_value[key])
+                        self.on_change_value.invoke(auto,key,new_value[key])
             case DictChangeTypes.AddChange():
-                self.on_add(change.key,change.value)
+                self.on_add.invoke(auto,change.key,change.value)
             case DictChangeTypes.RemoveChange():
-                self.on_remove(change.key)
+                self.on_remove.invoke(auto,change.key)
             case DictChangeTypes.ChangeValueChange():
-                self.on_change_value(change.key,change.value)
+                self.on_change_value.invoke(auto,change.key,change.value)
             case _:
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
  
@@ -424,20 +428,21 @@ class EventTopic(Topic):
         change = EventChangeTypes.EmitChange(self._name,args)
         self.apply_change_external(change)
 
-    def notify_listeners(self, change: Change, old_value, new_value):
+    def notify_listeners(self,auto:bool, change: Change, old_value, new_value):
         '''
-        Not using super().notify_listeners() because we don't want to call on_set() and on_set2() for event topics.
+        Not using super().notify_listeners(auto,) because we don't want to call on_set.invoke(auto,) and on_set2.invoke(auto,) for event topics.
         '''
         match change:
             case EventChangeTypes.EmitChange():
                 args = merge_dicts(change.args,change.forward_info)
-                forward_info = self.on_emit(**args)[0]
-                if forward_info is None:
-                    forward_info = {}
-                change.forward_info = forward_info
+                forward_info_list = self.on_emit.invoke(auto,**args)
+                if len(forward_info_list)>0 and forward_info_list[0] is not None:
+                    if isinstance(forward_info_list[0],dict):
+                        change.forward_info = forward_info_list[0]
+                        
             case EventChangeTypes.ReversedEmitChange():
                 args = merge_dicts(change.args,change.forward_info)
-                self.on_reverse(**args)
+                self.on_reverse.invoke(auto,**args)
 
 all_topic_types = {
     'generic': GenericTopic,

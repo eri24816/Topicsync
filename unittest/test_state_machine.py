@@ -1,6 +1,6 @@
 import unittest
-from chatroom import state_machine
-from chatroom.state_machine import StateMachine
+from chatroom.state_machine import state_machine
+from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic import EventTopic, StringTopic
 from chatroom.change import InvalidChangeError
 
@@ -8,7 +8,7 @@ class StateMachineTransition(unittest.TestCase):
     def test_simple_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         with machine.record():
@@ -22,12 +22,12 @@ class StateMachineTransition(unittest.TestCase):
     def test_chain(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
+        a.on_set.add_auto(lambda value: b.set('hello '+value))
+        b.on_set.add_auto(lambda value: c.set(value+'!'))
         with machine.record():
             a.set('world')
         self.assertEqual(a.get(),'world')
@@ -38,12 +38,12 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
+        a.on_set.add_auto(lambda value: b.set('hello '+value))
+        b.on_set.add_auto(lambda value: c.set(value+'!'))
         b.add_validator(lambda old,new,change: new != 'hello world')
         with self.assertRaises(InvalidChangeError):
             with machine.record():
@@ -64,12 +64,12 @@ class StateMachineTransition(unittest.TestCase):
     def test_failed_and_catched_tranition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
+        a.on_set.add_auto(lambda value: b.set('hello '+value))
+        b.on_set.add_auto(lambda value: c.set(value+'!'))
         b.add_validator(lambda old,new,change: new != 'hello world')
         with machine.record():
             try:
@@ -89,27 +89,29 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(c.get(),'hello Eric!')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a','b','c'])
     
-    def test_prevent_recursive_change(self):
-        changes_list = []
-        transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
-        a=machine.add_topic('a',StringTopic)
-        b=machine.add_topic('b',StringTopic)
-        c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
-        c.on_set += lambda value: a.set('NO ' + value)
-        with machine.record():
-            a.set('world')
+    # test_prevent_recursive_change is removed because from v0.6.0, recursive changes are not blocked anymore.
 
-        self.assertEqual(a.get(),'world')
-        self.assertEqual(b.get(),'hello world')
-        self.assertEqual(c.get(),'hello world!')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'b', 'c'])
+    # def test_prevent_recursive_change(self):
+    #     changes_list = []
+    #     transition_list = []
+    #     machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
+    #     a=machine.add_topic('a',StringTopic)
+    #     b=machine.add_topic('b',StringTopic)
+    #     c=machine.add_topic('c',StringTopic)
+    #     a.on_set.add_auto(lambda value: b.set('hello '+value))
+    #     b.on_set.add_auto(lambda value: c.set(value+'!'))
+    #     c.on_set.add_auto(lambda value: a.set('NO ' + value))
+    #     with machine.record():
+    #         a.set('world')
+
+    #     self.assertEqual(a.get(),'world')
+    #     self.assertEqual(b.get(),'hello world')
+    #     self.assertEqual(c.get(),'hello world!')
+    #     self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a', 'b', 'c'])
 
     def test_fail_set_without_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         b.add_validator(lambda old,new,change: False)
@@ -124,7 +126,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_set_with_except(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
@@ -144,12 +146,12 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_try_except_in_on_set(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
         c.add_validator(lambda old,new,change: False)
-        a.on_set += lambda value: b.set(value + ' world')
+        a.on_set.add_auto(lambda value: b.set(value + ' world'))
 
         def try_on_set(value):
             try:
@@ -157,7 +159,7 @@ class StateMachineTransition(unittest.TestCase):
             except:
                 pass 
 
-        b.on_set += try_on_set
+        b.on_set.add_auto(try_on_set)
 
         with machine.record():
             a.set('hello')
@@ -169,18 +171,18 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_subtrees(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
         d=machine.add_topic('d',StringTopic)
         e=machine.add_topic('e',StringTopic)
 
-        a.on_set += lambda value: d.set('newd')
-        a.on_set += lambda value: b.set('newb')
-        b.on_set += lambda value: c.set('newc')
+        a.on_set.add_auto(lambda value: d.set('newd'))
+        a.on_set.add_auto(lambda value: b.set('newb'))
+        b.on_set.add_auto(lambda value: c.set('newc'))
         c.add_validator(lambda old,new,change: False)
-        d.on_set += lambda value: e.set('newe')
+        d.on_set.add_auto(lambda value: e.set('newe'))
         with machine.record():
             try:
                 a.set('newa')
@@ -196,15 +198,15 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_fail_subtrees_2(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
         d=machine.add_topic('d',StringTopic)
         e=machine.add_topic('e',StringTopic)
     
-        a.on_set += lambda value: d.set('newd')
-        a.on_set += lambda value: b.set('newb')
+        a.on_set.add_auto(lambda value: d.set('newd'))
+        a.on_set.add_auto(lambda value: b.set('newb'))
 
         def b_on_set(value):
             try:
@@ -212,9 +214,9 @@ class StateMachineTransition(unittest.TestCase):
             except:
                 pass
 
-        b.on_set += b_on_set
+        b.on_set.add_auto(b_on_set)
         c.add_validator(lambda old,new,change: False)
-        d.on_set += lambda value: e.set('newe')
+        d.on_set.add_auto(lambda value: e.set('newe'))
         
         with machine.record():
             a.set('newa')
@@ -228,7 +230,7 @@ class StateMachineTransition(unittest.TestCase):
 
     def test_recreate_topic(self):
         changes_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
     
         machine.remove_topic('a')
@@ -244,14 +246,14 @@ from chatroom import HistoryManager
 class UndoRedo(unittest.TestCase):
     def test_undo_redo(self):
         history = HistoryManager()
-        machine = StateMachine(on_transition_done=history.add_transition)
+        machine = StateMachine(transition_callback=history.add_transition)
         history.set_server(machine)
 
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
+        a.on_set.add_auto(lambda value: b.set('hello '+value))
+        b.on_set.add_auto(lambda value: c.set(value+'!'))
         a.set('world')
         b.set('uwu')
         c.set('owo')
@@ -292,14 +294,14 @@ class UndoRedo(unittest.TestCase):
 
     def test_undo_redo_2(self):
         history = HistoryManager()
-        machine = StateMachine(on_transition_done=history.add_transition)
+        machine = StateMachine(transition_callback=history.add_transition)
         history.set_server(machine)
 
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        a.on_set += lambda value: b.set('hello '+value)
-        b.on_set += lambda value: c.set(value+'!')
+        a.on_set.add_auto(lambda value: b.set('hello '+value))
+        b.on_set.add_auto(lambda value: c.set(value+'!'))
         with machine.record():
             a.set('world')
             b.set('uwu')
@@ -337,7 +339,7 @@ class RunAfterTransition(unittest.TestCase):
     def test_run_after_transition(self):
         changes_list = []
         transition_list = []
-        machine = StateMachine(on_changes_made=lambda changes,_:changes_list.append(changes),on_transition_done=lambda transition: transition_list.append(transition))
+        machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes),transition_callback=lambda transition: transition_list.append(transition))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic,init_value=' world')
         e=machine.add_topic('e',EventTopic)
@@ -349,12 +351,12 @@ class RunAfterTransition(unittest.TestCase):
             a.set('hello')
             return {'old':old} # This information is useful for reverse
             
-        e.on_emit += on_emit
-        e.on_reverse += lambda old: (a.set(old),print('reverse',old)) # This is called when undoing.
+        e.on_emit.add_auto(on_emit)
+        e.on_reverse.add_auto(lambda old: (a.set(old),print('reverse',old))) # This is called when undoing.
 
         # Although the callback c.set is added before b.set, it will be called after b.set, in the next transition.
-        a.on_set += lambda value: machine.do_after_transition(lambda: c.set(value+' !'))
-        a.on_set += lambda value: b.set(value+' world')
+        a.on_set.add_auto(lambda value: machine.do_after_transition(lambda: c.set(value+' !')))
+        a.on_set.add_auto(lambda value: b.set(value+' world'))
 
         with machine.record():
             e.emit()
@@ -374,7 +376,7 @@ class RunAfterTransition(unittest.TestCase):
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),' world')
         self.assertEqual(c.get(),' !')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['b','a'])
 
         machine.redo(transition_list[0])
         self.assertEqual(a.get(),'hello')

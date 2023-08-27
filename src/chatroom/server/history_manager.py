@@ -1,5 +1,5 @@
 from chatroom.server.server import ChatroomServer
-from chatroom.state_machine import StateMachine, Transition
+from chatroom.state_machine.state_machine import StateMachine, Transition
 
 
 class HistoryManager:
