@@ -8,7 +8,7 @@ class TestStringDiffChange(unittest.TestCase):
     def test_insert_change(self):
         topic = StringTopic('test', None, init_value='ddd')
         insertion = StringChangeTypes.InsertChange('test', topic.version, 1, 'abcd')
-        topic.apply_change(insertion, notify_listeners=False)
+        topic.apply_change(insertion)
 
         assert topic.get() == 'dabcddd'
 
@@ -17,14 +17,14 @@ class TestStringDiffChange(unittest.TestCase):
         insertion = StringChangeTypes.InsertChange('test', topic.version, 4, 'abcd')
 
         with self.assertRaises(InvalidChangeError):
-            topic.apply_change(insertion, notify_listeners=False)
+            topic.apply_change(insertion)
 
     def test_insert_position_less_than_zero(self):
         topic = StringTopic('test', None, init_value='ddd')
         insertion = StringChangeTypes.InsertChange('test', topic.version, -5, 'abcd')
 
         with self.assertRaises(InvalidChangeError):
-            topic.apply_change(insertion, notify_listeners=False)
+            topic.apply_change(insertion)
 
     def test_delete_change(self):
         topic = StringTopic('test', None, init_value='abcd')
@@ -44,14 +44,14 @@ class TestStringDiffChange(unittest.TestCase):
         deletion = StringChangeTypes.DeleteChange('test', topic.version, 4, 'abcd')
 
         with self.assertRaises(InvalidChangeError):
-            topic.apply_change(deletion, notify_listeners=False)
+            topic.apply_change(deletion)
 
     def test_delete_position_less_than_zero(self):
         topic = StringTopic('test', None, init_value='ddd')
         deletion = StringChangeTypes.DeleteChange('test', topic.version, -2, 'd')
 
         with self.assertRaises(InvalidChangeError):
-            topic.apply_change(deletion, notify_listeners=False)
+            topic.apply_change(deletion)
 
     def test_delete_last_position_empty_string(self):
         topic = StringTopic('test', None, init_value='ddd')
@@ -66,7 +66,7 @@ class TestStringDiffChange(unittest.TestCase):
         deletion = StringChangeTypes.DeleteChange('test', topic.version, 3, 'd')
 
         with self.assertRaises(InvalidChangeError):
-            topic.apply_change(deletion, notify_listeners=False)
+            topic.apply_change(deletion)
 
 
     def _test_2_change_order(self, original, result12, result21, topic_change_gen: Callable[[str, str], Tuple[Change, Change]]):

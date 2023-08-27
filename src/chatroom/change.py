@@ -114,12 +114,6 @@ class GenericChangeTypes:
 
     types = {'set':SetChange}
 
-def _before(string, cursor) -> str:
-    return string[:cursor]
-
-def _after(string, cursor) -> str:
-    return string[cursor:]
-
 class StringChangeTypes:
     class SetChange(SetChange):
         def sync_topic_version(self, current_version: str, topic: StringTopic):
