@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 import copy
 
 from chatroom.utils import IdGenerator
-from chatroom.string_diff import insert, delete, adjust_delete
+from chatroom.string_diff import insert, delete, adjust_delete, extend_delete
 
 if TYPE_CHECKING:
     from chatroom.topic import Topic, StringTopic
@@ -161,9 +161,12 @@ class StringChangeTypes:
                 if ins_pos < self.position:
                     self.position += len(change.insertion)
             else:
-                # for del_pos, deletion in change.deletions():
                 if change.position < self.position:
-                    self.position -= min(len(change.deletion), self.position - change.position)
+                    if change.position + len(change.deletion) <= self.position:
+                        self.position -= min(len(change.deletion), self.position - change.position)
+                    else:
+                        self.position = change.position
+                        self.insertion = ''
 
         def apply(self, old_value):
             try:
@@ -212,10 +215,15 @@ class StringChangeTypes:
 
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
             if isinstance(change, StringChangeTypes.DeleteChange):
-                self.position, self.deletion = adjust_delete(change.position, change.deletion, self.position, self.deletion)
+                self.position, self.deletion = adjust_delete(
+                    applied_start=change.position, applied_delete=change.deletion,
+                    current_start=self.position, current_delete=self.deletion
+                )
             elif isinstance(change, StringChangeTypes.InsertChange):
                 if change.position <= self.position:
                     self.position += len(change.insertion)
+                elif change.position < self.position + len(self.deletion):
+                    self.deletion = extend_delete(self.deletion, at_pos=change.position - self.position, string=change.insertion)
 
 
         def apply(self, old_value):

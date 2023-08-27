@@ -74,3 +74,6 @@ def adjust_delete(applied_start: int, applied_delete: str, current_start: int, c
 
     return min(applied_start, current_start), \
         _before(current_delete, overlap_rel.start) + _after(current_delete, overlap_rel.end())
+
+def extend_delete(deletion, at_pos: int, string: str) -> str:
+    return _before(deletion, at_pos) + string + _after(deletion, at_pos)
