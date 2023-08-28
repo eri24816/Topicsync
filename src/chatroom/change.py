@@ -3,9 +3,10 @@ from typing import TYPE_CHECKING, Any, List, Optional
 import copy
 
 from chatroom.utils import IdGenerator
+from chatroom.string_diff import insert, delete, adjust_delete, extend_delete
 
 if TYPE_CHECKING:
-    from chatroom.topic import Topic
+    from chatroom.topic import Topic, StringTopic
 '''
 Change is a class that represents a change to a topic. It can be serialized and be passed between clients and the server.
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).
@@ -115,10 +116,129 @@ class GenericChangeTypes:
 
 class StringChangeTypes:
     class SetChange(SetChange):
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            pass
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
-    types = {'set':SetChange}
+    class InsertChange(Change):
+        def __init__(self, topic_name: str, topic_version: str, position: int, insertion: str, id: Optional[str]=None):
+            super().__init__(topic_name, id)
+            self.position = position
+            self.insertion = insertion
+            self.topic_version = topic_version
+
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            if self.topic_version == current_version:
+                return
+
+            try:
+                changes = topic.changes_from(self.topic_version)
+            except:
+                raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
+
+            for change in changes:
+                if isinstance(change, StringChangeTypes.SetChange):
+                    # view it as delete all and insert all, the cursor should be at the beginning
+                    self.position = 0
+                else:
+                    self._adjust(change)
+            self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
+
+        def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
+            # we use a simple behavior on cursor movement:
+            # only insert/delete before (exclusive) the cursor will affect the cursor position
+            # this is also used by google docs and hackmd
+            if isinstance(change, StringChangeTypes.InsertChange):
+                ins_pos = change.position
+                if ins_pos < self.position:
+                    self.position += len(change.insertion)
+            else:
+                if change.position < self.position:
+                    if change.position + len(change.deletion) <= self.position:
+                        self.position -= min(len(change.deletion), self.position - change.position)
+                    else:
+                        self.position = change.position
+                        self.insertion = ''
+
+        def apply(self, old_value):
+            try:
+                return insert(old_value, self.position, self.insertion)
+            except ValueError as e:
+                raise InvalidChangeError(self, e.args[0]) from e
+
+        def serialize(self) ->dict[str,Any]:
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": self.topic_version, "position": self.position, "insertion": self.insertion, "id": self.id}
+
+        def __eq__(self, other):
+            if not isinstance(other, StringChangeTypes.InsertChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.position == other.position and \
+                self.insertion == other.insertion and \
+                self.id == other.id
+
+    class DeleteChange(Change):
+        def __init__(self, topic_name: str, topic_version: str, position: int, deletion: str, id: Optional[str]=None):
+            super().__init__(topic_name, id)
+            self.position = position
+            self.deletion = deletion
+            self.topic_version = topic_version
+
+        def sync_topic_version(self, current_version: str, topic: StringTopic):
+            if self.topic_version == current_version:
+                return
+
+            try:
+                changes = topic.changes_from(self.topic_version)
+            except:
+                raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
+
+            for change in changes:
+                if isinstance(change, StringChangeTypes.SetChange):
+                    # view it as delete all and insert all,
+                    # the cursor should be at the beginning and no deletion will happen
+                    self.position = 0
+                    self.deletion = ''
+                else:
+                    self._adjust(change)
+            self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
+
+
+        def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
+            if isinstance(change, StringChangeTypes.DeleteChange):
+                self.position, self.deletion = adjust_delete(
+                    applied_start=change.position, applied_delete=change.deletion,
+                    current_start=self.position, current_delete=self.deletion
+                )
+            elif isinstance(change, StringChangeTypes.InsertChange):
+                if change.position <= self.position:
+                    self.position += len(change.insertion)
+                elif change.position < self.position + len(self.deletion):
+                    self.deletion = extend_delete(self.deletion, at_pos=change.position - self.position, string=change.insertion)
+
+
+        def apply(self, old_value):
+            try:
+                return delete(old_value, self.position, self.deletion)
+            except ValueError as e:
+                raise InvalidChangeError(self, e.args[0]) from e
+
+        def serialize(self) ->dict[str,Any]:
+            return {"topic_name": self.topic_name, "topic_type": "string", "topic_version": self.topic_version, "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
+
+        def __eq__(self, other):
+            if not isinstance(other, StringChangeTypes.DeleteChange):
+                return False
+            return self.topic_name == other.topic_name and \
+                self.position == other.position and \
+                self.deletion == other.deletion and \
+                self.id == other.id
+
+    types = {'set':SetChange, 'insert': InsertChange, 'delete': DeleteChange}
+
 
 class IntChangeTypes:
     class SetChange(SetChange):
