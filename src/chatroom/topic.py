@@ -356,7 +356,9 @@ class DictTopic(Topic):
         self.apply_change_external(change)
 
     def remove(self, value):
-        change = DictChangeTypes.PopChange(self._name,value)
+        self._value:Dict
+        key = list(self._value.keys())[list(self._value.values()).index(value)]
+        change = DictChangeTypes.PopChange(self._name,key)
         self.apply_change_external(change)
 
     def pop(self, key):
