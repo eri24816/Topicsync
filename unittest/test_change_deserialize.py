@@ -76,7 +76,7 @@ class TestChangeDeserialize(unittest.TestCase):
         self._test_deserializable(change)
         
     def test_dict_remove(self):
-        change = DictChangeTypes.RemoveChange('topic', 'k')
+        change = DictChangeTypes.PopChange('topic', 'k')
         self._test_deserializable(change)
         
     def test_dict_change_value(self):

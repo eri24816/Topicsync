@@ -172,7 +172,7 @@ class ChatroomServer:
             temp = self._topic_list[topic_name]
             temp['boundary_value'] = topic.get()
             self._topic_list.change_value(topic_name,temp)
-            self._topic_list.remove(topic_name)
+            self._topic_list.pop(topic_name)
         logger.debug(f"Removed topic {topic_name}")
 
     def undo(self,transition:Transition):

@@ -400,7 +400,7 @@ class DictChangeTypes:
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"dict","type":"add","key":self.key,"value":self.value,"id":self.id}
         def inverse(self)->Change:
-            return DictChangeTypes.RemoveChange(self.topic_name,self.key)
+            return DictChangeTypes.PopChange(self.topic_name,self.key)
         def __eq__(self, other):
             if not isinstance(other, DictChangeTypes.AddChange):
                 return False
@@ -408,7 +408,7 @@ class DictChangeTypes:
                 self.key == other.key and \
                 self.value == other.value and \
                 self.id == other.id
-    class RemoveChange(Change):
+    class PopChange(Change):
         def __init__(self,topic_name, key,id=None):
             super().__init__(topic_name,id)
             self.key = key
@@ -419,11 +419,11 @@ class DictChangeTypes:
             self.value = old_dict.pop(self.key)
             return old_dict
         def serialize(self):
-            return {"topic_name":self.topic_name,"topic_type":"dict","type":"remove","key":self.key,"id":self.id}
+            return {"topic_name":self.topic_name,"topic_type":"dict","type":"pop","key":self.key,"id":self.id}
         def inverse(self)->Change:
             return DictChangeTypes.AddChange(self.topic_name,self.key,self.value)
         def __eq__(self, other):
-            if not isinstance(other, DictChangeTypes.RemoveChange):
+            if not isinstance(other, DictChangeTypes.PopChange):
                 return False
             return self.topic_name == other.topic_name and \
                 self.key == other.key and \
@@ -455,7 +455,7 @@ class DictChangeTypes:
                 self.value == other.value and \
                 self.old_value == other.old_value and \
                 self.id == other.id
-    types = {'set':SetChange,'add':AddChange,'remove':RemoveChange,'change_value':ChangeValueChange}
+    types = {'set':SetChange,'add':AddChange,'pop':PopChange,'change_value':ChangeValueChange}
 
 class EventChangeTypes:
     class EmitChange(Change):

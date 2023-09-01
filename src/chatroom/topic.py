@@ -355,13 +355,13 @@ class DictTopic(Topic):
         change = DictChangeTypes.AddChange(self._name,key,value)
         self.apply_change_external(change)
 
-    def remove(self, key):
-        change = DictChangeTypes.RemoveChange(self._name,key)
+    def remove(self, value):
+        change = DictChangeTypes.PopChange(self._name,value)
         self.apply_change_external(change)
 
     def pop(self, key):
         temp = self._value[key]
-        change = DictChangeTypes.RemoveChange(self._name,key)
+        change = DictChangeTypes.PopChange(self._name,key)
         self.apply_change_external(change)
         return temp
 
@@ -377,6 +377,9 @@ class DictTopic(Topic):
     
     def __delitem__(self, key):
         self.remove(key)
+
+    def __contains__(self,key):
+        return key in self._value
 
     def notify_listeners(self,auto:bool,change:Change, old_value:dict, new_value:dict):
         super().notify_listeners(auto,change,old_value,new_value)
@@ -396,7 +399,7 @@ class DictTopic(Topic):
                         self.on_change_value.invoke(auto,key,new_value[key])
             case DictChangeTypes.AddChange():
                 self.on_add.invoke(auto,change.key,change.value)
-            case DictChangeTypes.RemoveChange():
+            case DictChangeTypes.PopChange():
                 self.on_remove.invoke(auto,change.key)
             case DictChangeTypes.ChangeValueChange():
                 self.on_change_value.invoke(auto,change.key,change.value)
