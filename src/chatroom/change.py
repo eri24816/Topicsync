@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 import copy
 
 from chatroom.utils import IdGenerator
@@ -49,7 +49,11 @@ class Change:
     @staticmethod
     def deserialize(change_dict:dict[str,Any])->Change:
         change_type, topic_type, change_dict = change_dict['type'], change_dict['topic_type'], remove_entry(remove_entry(change_dict,'type'),'topic_type')
-        return type_name_to_change_types[topic_type].types[change_type](**change_dict)
+        return type_name_to_change_types[topic_type].types[change_type].deserialize_init(change_dict)
+
+    @classmethod
+    def deserialize_init(cls, change_dict: dict[str, Any]) -> Self:
+        return cls(**change_dict)
 
     def __init__(self,topic_name,id:Optional[str]=None):
         self.topic_name = topic_name
