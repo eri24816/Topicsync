@@ -175,6 +175,11 @@ class StringChangeTypes:
         def serialize(self) ->dict[str,Any]:
             return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": self.topic_version, "position": self.position, "insertion": self.insertion, "id": self.id}
 
+        def inverse(self) -> Change:
+            # TODO: here use the knowledge that a topic use a change's id to versioning
+            # it's a duplication of knowledge
+            return StringChangeTypes.DeleteChange(self.topic_name, self.id, self.position, self.insertion, self.topic_version)
+
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.InsertChange):
                 return False
@@ -232,6 +237,11 @@ class StringChangeTypes:
 
         def serialize(self) ->dict[str,Any]:
             return {"topic_name": self.topic_name, "topic_type": "string", "topic_version": self.topic_version, "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
+
+        def inverse(self) -> Change:
+            # TODO: here use the knowledge that a topic use a change's id to versioning
+            # it's a duplication of knowledge
+            return StringChangeTypes.InsertChange(self.topic_name, self.id, self.position, self.deletion, self.topic_version)
 
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.DeleteChange):

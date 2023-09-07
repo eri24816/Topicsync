@@ -180,6 +180,14 @@ class StringTopic(Topic):
         change = StringChangeTypes.SetChange(self._name,value)
         self.apply_change_external(change)
 
+    def insert(self, position: int, insertion: str):
+        change = StringChangeTypes.InsertChange(self._name, self.version, position, insertion)
+        self.apply_change_external(change)
+
+    def delete(self, position: int, deletion: str):
+        change = StringChangeTypes.DeleteChange(self._name, self.version, position, deletion)
+        self.apply_change_external(change)
+
     def set_from_binary(self, data):
         b64 = base64.b64encode(data).decode('utf-8')
         self.set(b64)
