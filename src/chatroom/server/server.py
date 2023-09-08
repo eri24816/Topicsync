@@ -89,8 +89,14 @@ class ChatroomServer:
         service = self._services[service_name]
         if service.pass_client_id:
             args["sender"] = sender.id
-        response = service.callback(**args)
-        sender.send("response", response=response, request_id=request_id)
+        try:
+            response = service.callback(**args)
+        except Exception as e:
+            # at least send a response to the client so it can free the sent request list
+            sender.send("response",response="request failed",request_id=request_id)
+            raise
+        else:
+            sender.send("response", response=response, request_id=request_id)
 
     """
     API
