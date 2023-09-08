@@ -29,6 +29,10 @@ Using a service, a client can call a function in another client and get the retu
 
 Special services are those with their names begin with `_chatroom/`.
 
+## Debugging
+
+Set DEBUG environment variable to `true` to enable debug mode. Debugger listens on http://localhost:8800.
+
 ## Internal Communication API (Outdated, need to be updated later)
 
 The communication between a ChatRoom server and a client is done via a WebSocket connection. Every message has the following format:

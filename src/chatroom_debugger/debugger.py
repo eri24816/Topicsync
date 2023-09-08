@@ -26,7 +26,7 @@ class Debugger:
         if path == "/ws":
             return None
 
-        print(path)
+        #print(path)
         
         content_type = "text/plain"
         status = http.HTTPStatus.OK
@@ -66,7 +66,7 @@ class Debugger:
 
         except Exception as e:
             self._clients.remove(ws)
-            print("disconnected",traceback.format_exc())
+            #print("disconnected",traceback.format_exc())
 
     def send(self, data):
         for client in self._clients:

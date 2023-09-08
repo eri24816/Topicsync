@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Any, Callable, Dict, List, TypeVar
 import logging
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ from chatroom_debugger import Debugger
 
 class ChatroomServer:
     def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None) -> None:
+        self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
         self._port = port
         self._host = host
         def get_value(topic_name):
@@ -27,8 +29,8 @@ class ChatroomServer:
         self.set_client_id_count = self._client_manager.set_client_id_count
         self.get_client_id_count = self._client_manager.get_client_id_count
         self._services: Dict[str, Service] = {}
-        self._debugger = Debugger(8800,'localhost')
-        self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree)
+        self._debugger = Debugger(8800,'localhost') if self.debug else None
+        self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree if self.debug else None)
 
         self._topic_list = self._state_machine.add_topic("_chatroom/topic_list",DictTopic,is_stateful=True,init_value=
                                                          {'_chatroom/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
@@ -48,7 +50,7 @@ class ChatroomServer:
         self._client_manager.register_message_handler("action",self._handle_action)
         self._client_manager.register_message_handler("request",self._handle_request)
         await asyncio.gather(
-            self._debugger.run(),
+            self._debugger.run() if self.debug else asyncio.sleep(0),
             self._client_manager.run(),
             websockets_serve(self._client_manager.handle_client,self._host,self._port),
         )
