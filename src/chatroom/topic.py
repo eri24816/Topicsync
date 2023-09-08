@@ -52,7 +52,7 @@ class Topic(metaclass = abc.ABCMeta):
         Validate the change and return the new value. Raise InvalidChangeException if the change is invalid.
         '''
         old_value = self._value
-        new_value = change.apply(copy.deepcopy(self._value))
+        new_value = change.apply(self._value)
     
         for validator in self._validators:
             if not validator(old_value,new_value,change):
