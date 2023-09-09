@@ -131,7 +131,7 @@ class StringChangeTypes:
             self.position = position
             self.insertion = insertion
             self.topic_version = topic_version
-            self.result_topic_version = self.id if not result_topic_version else result_topic_version
+            self.result_topic_version = IdGenerator.generate_id() if not result_topic_version else result_topic_version
 
         def exchange_topic_version(self, current_version: str, topic: StringTopic) -> str:
             if self.topic_version == current_version:
@@ -149,6 +149,7 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
 
             return self.result_topic_version
 
@@ -195,7 +196,7 @@ class StringChangeTypes:
             self.position = position
             self.deletion = deletion
             self.topic_version = topic_version
-            self.result_topic_version = self.id if not result_topic_version else result_topic_version
+            self.result_topic_version = IdGenerator.generate_id() if not result_topic_version else result_topic_version
 
         def exchange_topic_version(self, current_version: str, topic: StringTopic) -> str:
             if self.topic_version == current_version:
@@ -215,6 +216,7 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
+            self.id = f'{self.id}_adjust'
 
             return self.result_topic_version
 
