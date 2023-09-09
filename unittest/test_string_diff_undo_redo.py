@@ -3,6 +3,9 @@ from chatroom.state_machine.state_machine import StateMachine
 from chatroom.topic import StringTopic
 
 class MyTestCase(unittest.TestCase):
+    '''
+    Here we only test valid undo/redo
+    '''
     def test_single_undo_redo_insert(self):
         transitions = []
         machine = StateMachine(transition_callback=transitions.append)
