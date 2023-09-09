@@ -162,10 +162,10 @@ class StringTopic(Topic):
         self.changes: List[Change] = []
 
     def _validate_change_and_get_result(self,change:Change):
-        change.sync_topic_version(self.version, self)
-        self.version_to_index[change.id] = len(self.changes)
+        result_version = change.exchange_topic_version(self.version, self)
+        self.version_to_index[result_version] = len(self.changes)
         self.changes.append(change)
-        self.version = change.id
+        self.version = result_version
         return super()._validate_change_and_get_result(change)
 
     def changes_from(self, version: str) -> Iterable[Change]:
