@@ -38,7 +38,7 @@ def remove_entry(dictionary,key):
     return dictionary
 
 def type_validator(*ts):
-    def f(old_value,new_value,change):
+    def f(new_value,change):
         for t in ts:
             if isinstance(new_value,t):
                 return True

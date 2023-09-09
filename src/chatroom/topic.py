@@ -27,7 +27,7 @@ class Topic(metaclass = abc.ABCMeta):
     
     def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True,init_value=None):
         self._name = name
-        self._validators : List[Callable[[Any,Any,Change],bool]] = []
+        self._validators : List[Callable[[Any,Change],bool]] = []
         self._state_machine = state_machine
         self._is_stateful = is_stateful
 
@@ -51,11 +51,13 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         Validate the change and return the new value. Raise InvalidChangeException if the change is invalid.
         '''
-        old_value = self._value
         new_value = change.apply(self._value)
     
         for validator in self._validators:
-            if not validator(old_value,new_value,change):
+            if not validator(new_value,change):
+                # If self._value is immutable, this line is not nessesary.
+                # But if self._value is mutable, we need to revert the change.
+                self._value = change.inverse().apply(self._value)
                 raise InvalidChangeError(change,'Validator failed') #TODO: Add more info
         
         return new_value
@@ -70,7 +72,7 @@ class Topic(metaclass = abc.ABCMeta):
     def get(self):
         return copy.deepcopy(self._value)
     
-    def add_validator(self,validator:Callable[[Any,Any,Change],bool]):
+    def add_validator(self,validator:Callable[[Any,Change],bool]):
         '''
         Add a validator to the topic. The validator is a function that takes the old value, new value and the change as arguments and returns True if the change is valid and False otherwise.
         '''
@@ -258,6 +260,12 @@ class SetTopic(Topic):
     
     def __len__(self):
         return len(self._value)
+    
+    def __iter__(self):
+        return self._value.__iter__()
+    
+    def __contains__(self, item):
+        return item in self._value
 
     def notify_listeners(self,auto:bool,change:Change, old_value:list, new_value:list):
         super().notify_listeners(auto,change,old_value,new_value)
@@ -280,7 +288,7 @@ class SetTopic(Topic):
             
 class ListTopic(Topic):
     @staticmethod
-    def unique_validator(old_value,new_value,change):
+    def unique_validator(new_value,change):
         '''
         Validator that prevents the list from having repeated items.
         '''

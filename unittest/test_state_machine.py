@@ -44,7 +44,7 @@ class StateMachineTransition(unittest.TestCase):
         c=machine.add_topic('c',StringTopic)
         a.on_set.add_auto(lambda value: b.set('hello '+value))
         b.on_set.add_auto(lambda value: c.set(value+'!'))
-        b.add_validator(lambda old,new,change: new != 'hello world')
+        b.add_validator(lambda new,change: new != 'hello world')
         with self.assertRaises(InvalidChangeError):
             with machine.record():
                 a.set('world')
@@ -70,7 +70,7 @@ class StateMachineTransition(unittest.TestCase):
         c=machine.add_topic('c',StringTopic)
         a.on_set.add_auto(lambda value: b.set('hello '+value))
         b.on_set.add_auto(lambda value: c.set(value+'!'))
-        b.add_validator(lambda old,new,change: new != 'hello world')
+        b.add_validator(lambda new,change: new != 'hello world')
         with machine.record():
             try:
                 a.set('world')
@@ -114,7 +114,7 @@ class StateMachineTransition(unittest.TestCase):
         machine = StateMachine(changes_callback=lambda changes,_:changes_list.append(changes))
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
-        b.add_validator(lambda old,new,change: False)
+        b.add_validator(lambda new,change: False)
         with self.assertRaises(InvalidChangeError):
             with machine.record():
                 a.set('world')
@@ -130,7 +130,7 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        b.add_validator(lambda old,new,change: new != 'test')
+        b.add_validator(lambda new,change: new != 'test')
         with machine.record():
             a.set('hello')
             try:
@@ -150,7 +150,7 @@ class StateMachineTransition(unittest.TestCase):
         a=machine.add_topic('a',StringTopic)
         b=machine.add_topic('b',StringTopic)
         c=machine.add_topic('c',StringTopic)
-        c.add_validator(lambda old,new,change: False)
+        c.add_validator(lambda new,change: False)
         a.on_set.add_auto(lambda value: b.set(value + ' world'))
 
         def try_on_set(value):
@@ -181,7 +181,7 @@ class StateMachineTransition(unittest.TestCase):
         a.on_set.add_auto(lambda value: d.set('newd'))
         a.on_set.add_auto(lambda value: b.set('newb'))
         b.on_set.add_auto(lambda value: c.set('newc'))
-        c.add_validator(lambda old,new,change: False)
+        c.add_validator(lambda new,change: False)
         d.on_set.add_auto(lambda value: e.set('newe'))
         with machine.record():
             try:
@@ -215,7 +215,7 @@ class StateMachineTransition(unittest.TestCase):
                 pass
 
         b.on_set.add_auto(b_on_set)
-        c.add_validator(lambda old,new,change: False)
+        c.add_validator(lambda new,change: False)
         d.on_set.add_auto(lambda value: e.set('newe'))
         
         with machine.record():
