@@ -120,21 +120,22 @@ class GenericChangeTypes:
 
 class StringChangeTypes:
     class SetChange(SetChange):
-        def sync_topic_version(self, current_version: str, topic: StringTopic):
-            pass
+        def exchange_topic_version(self, current_version: str, topic: StringTopic) -> str:
+            return self.id
         def serialize(self):
             return {"topic_name":self.topic_name,"topic_type":"string","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
 
     class InsertChange(Change):
-        def __init__(self, topic_name: str, topic_version: str, position: int, insertion: str, id: Optional[str]=None):
+        def __init__(self, topic_name: str, topic_version: str, position: int, insertion: str, result_topic_version: Optional[str] = None, id: Optional[str]=None):
             super().__init__(topic_name, id)
             self.position = position
             self.insertion = insertion
             self.topic_version = topic_version
+            self.result_topic_version = self.id if not result_topic_version else result_topic_version
 
-        def sync_topic_version(self, current_version: str, topic: StringTopic):
+        def exchange_topic_version(self, current_version: str, topic: StringTopic) -> str:
             if self.topic_version == current_version:
-                return
+                return self.result_topic_version
 
             try:
                 changes = topic.changes_from(self.topic_version)
@@ -148,7 +149,8 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
-            self.id = f'{self.id}_adjust'
+
+            return self.result_topic_version
 
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
             # we use a simple behavior on cursor movement:
@@ -173,12 +175,10 @@ class StringChangeTypes:
                 raise InvalidChangeError(self, e.args[0]) from e
 
         def serialize(self) ->dict[str,Any]:
-            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": self.topic_version, "position": self.position, "insertion": self.insertion, "id": self.id}
+            return {"topic_name": self.topic_name, "topic_type": "string", "type": "insert", "topic_version": self.topic_version, "position": self.position, "insertion": self.insertion, "result_topic_version": self.result_topic_version, "id": self.id}
 
         def inverse(self) -> Change:
-            # TODO: here use the knowledge that a topic use a change's id to versioning
-            # it's a duplication of knowledge
-            return StringChangeTypes.DeleteChange(self.topic_name, self.id, self.position, self.insertion, self.topic_version)
+            return StringChangeTypes.DeleteChange(self.topic_name, self.result_topic_version, self.position, self.insertion, result_topic_version=self.topic_version)
 
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.InsertChange):
@@ -186,18 +186,20 @@ class StringChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.position == other.position and \
                 self.insertion == other.insertion and \
+                self.result_topic_version == other.result_topic_version and \
                 self.id == other.id
 
     class DeleteChange(Change):
-        def __init__(self, topic_name: str, topic_version: str, position: int, deletion: str, id: Optional[str]=None):
+        def __init__(self, topic_name: str, topic_version: str, position: int, deletion: str, result_topic_version: Optional[str]=None, id: Optional[str]=None):
             super().__init__(topic_name, id)
             self.position = position
             self.deletion = deletion
             self.topic_version = topic_version
+            self.result_topic_version = self.id if not result_topic_version else result_topic_version
 
-        def sync_topic_version(self, current_version: str, topic: StringTopic):
+        def exchange_topic_version(self, current_version: str, topic: StringTopic) -> str:
             if self.topic_version == current_version:
-                return
+                return self.result_topic_version
 
             try:
                 changes = topic.changes_from(self.topic_version)
@@ -213,7 +215,8 @@ class StringChangeTypes:
                 else:
                     self._adjust(change)
             self.topic_version = current_version
-            self.id = f'{self.id}_adjust'
+
+            return self.result_topic_version
 
 
         def _adjust(self, change: StringChangeTypes.InsertChange | StringChangeTypes.DeleteChange):
@@ -236,12 +239,10 @@ class StringChangeTypes:
                 raise InvalidChangeError(self, e.args[0]) from e
 
         def serialize(self) ->dict[str,Any]:
-            return {"topic_name": self.topic_name, "topic_type": "string", "topic_version": self.topic_version, "type": "delete", "position": self.position, "deletion": self.deletion, "id": self.id}
+            return {"topic_name": self.topic_name, "topic_type": "string", "topic_version": self.topic_version, "type": "delete", "position": self.position, "deletion": self.deletion, "result_topic_version": self.result_topic_version, "id": self.id}
 
         def inverse(self) -> Change:
-            # TODO: here use the knowledge that a topic use a change's id to versioning
-            # it's a duplication of knowledge
-            return StringChangeTypes.InsertChange(self.topic_name, self.id, self.position, self.deletion, self.topic_version)
+            return StringChangeTypes.InsertChange(self.topic_name, self.result_topic_version, self.position, self.deletion, result_topic_version=self.topic_version)
 
         def __eq__(self, other):
             if not isinstance(other, StringChangeTypes.DeleteChange):
@@ -249,6 +250,7 @@ class StringChangeTypes:
             return self.topic_name == other.topic_name and \
                 self.position == other.position and \
                 self.deletion == other.deletion and \
+                self.result_topic_version == other.result_topic_version and \
                 self.id == other.id
 
     types = {'set':SetChange, 'insert': InsertChange, 'delete': DeleteChange}
