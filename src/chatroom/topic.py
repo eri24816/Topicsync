@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, List, TypeVa
 from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
 from chatroom.utils import Action, camel_to_snake
 import abc
-import pickle
 
 if TYPE_CHECKING:
     from chatroom.state_machine.state_machine import StateMachine
@@ -71,6 +70,13 @@ class Topic(metaclass = abc.ABCMeta):
     
     def get(self):
         return copy.deepcopy(self._value)
+
+    def get_init_message(self):
+        '''
+        The message that is sent to a client in a 'init' command when it subscribes to the topic.
+        In client, it is deserialized as a SetChange.
+        '''
+        return {"topic_name": self.get_name(), "value": self.get()}
     
     def add_validator(self,validator:Callable[[Any,Change],bool]):
         '''
@@ -162,6 +168,9 @@ class StringTopic(Topic):
         self.version = f"{name}_init"
         self.version_to_index: Dict[str, int] = {f"{name}_init": -1}
         self.changes: List[Change] = []
+
+    def get_init_message(self):
+        return super().get_init_message() | {'id': self.version} # client-side SetChange uses 'id' as version
 
     def _validate_change_and_get_result(self,change:Change):
         result_version = change.exchange_topic_version(self.version, self)

@@ -20,14 +20,6 @@ class ChatroomServer:
         self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
         self._port = port
         self._host = host
-        def get_value(topic_name):
-            topic = self._state_machine.get_topic(topic_name)
-            return topic.get()
-        def exists_topic(topic_name):
-            return self._state_machine.has_topic(topic_name)
-        self._client_manager = ClientManager(get_value,exists_topic)
-        self.set_client_id_count = self._client_manager.set_client_id_count
-        self.get_client_id_count = self._client_manager.get_client_id_count
         self._services: Dict[str, Service] = {}
         self._debugger = Debugger(8800,'localhost') if self.debug else None
         self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree if self.debug else None)
@@ -37,6 +29,10 @@ class ChatroomServer:
                                                          )
         self._topic_list.on_add += self._add_topic_raw
         self._topic_list.on_remove += self._remove_topic_raw
+        
+        self._client_manager = ClientManager(self._state_machine)
+        self.set_client_id_count = self._client_manager.set_client_id_count
+        self.get_client_id_count = self._client_manager.get_client_id_count
 
         self.record = self._state_machine.record
         self.do_after_transition = self._state_machine.do_after_transition

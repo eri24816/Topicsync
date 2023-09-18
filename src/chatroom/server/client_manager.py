@@ -2,6 +2,8 @@
 import asyncio
 import json
 import logging
+
+from chatroom.state_machine.state_machine import StateMachine
 logger = logging.getLogger(__name__)
 import traceback
 from typing import Awaitable, Callable, Dict, List, Tuple
@@ -36,9 +38,8 @@ class Client:
         self._sending_queue.put_nowait((self,args,kwargs))
 
 class ClientManager:
-    def __init__(self,get_topic_value,exists_topic) -> None:
-        self._get_topic_value = get_topic_value
-        self._exists_topic = exists_topic
+    def __init__(self,state_machine:StateMachine) -> None:
+        self._state_machine = state_machine
         self._clients:Dict[int,Client] = {}
         self._client_id_count = count(1)
         self._message_handlers:Dict[str,Callable[...,None|Awaitable[None]]] = {'subscribe':self._handle_subscribe,
@@ -109,16 +110,15 @@ class ClientManager:
             self._subscriptions[topic].discard(client.id)
 
     def _handle_subscribe(self,sender:Client,topic_name:str):
-        if not self._exists_topic(topic_name):
+        if not self._state_machine.has_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
             #? Should we send a message to the client?
             logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         self._subscriptions[topic_name].add(sender.id)
         logger.debug(f"Client {sender.id} subscribed to {topic_name}")
-        value = self._get_topic_value(topic_name)
-        #self.send(sender,"update",changes=[SetChange(topic_name,value).serialize()],action_id="")
-        self.send(sender,"init",topic_name=topic_name,value=value)
+        msg = self._state_machine.get_topic(topic_name).get_init_message()
+        self.send(sender,"init",**msg)
 
     def _handle_unsubscribe(self,sender:Client,topic_name:str):
         self._subscriptions[topic_name].discard(sender.id)

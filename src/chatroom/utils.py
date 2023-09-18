@@ -144,3 +144,42 @@ class IdGenerator:
     def __call__(self):
         self._id += 1
         return '0_'+str(self._id) # 0 means server
+
+class SimpleAction:
+    '''
+    A hub for callbacks.
+    Difference from `Action` class: no auto/manual distinction.
+    '''
+    def __init__(self):
+        self.callbacks:List[Callable] = []
+
+    def __add__(self,callback:Callable):
+        '''
+        Temporary backward compatibility. To be removed.
+        '''
+        self.callbacks.append(callback)
+        return self
+    
+    def __sub__(self,callback:Callable):
+        '''
+        Temporary backward compatibility. To be removed.
+        '''
+        self.callbacks.remove(callback)
+        return self
+    
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        '''Call each callback in the action with the given arguments.'''
+        returns = []
+        for callback in self.callbacks:
+            returns.append(callback(*args,**kwargs))
+        return returns
+
+class Clock:
+    def __init__(self, interval: float):
+        self.interval = interval
+        self.on_tick = SimpleAction()
+
+    async def run(self):
+        while True:
+            await asyncio.sleep(self.interval)
+            self.on_tick.invoke()
