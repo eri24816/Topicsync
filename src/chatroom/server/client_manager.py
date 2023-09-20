@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+from chatroom.server.update_buffer import UpdateBuffer
 
 from chatroom.state_machine.state_machine import StateMachine
 logger = logging.getLogger(__name__)
@@ -47,7 +48,10 @@ class ClientManager:
         self._subscriptions:defaultdict[str,set] =defaultdict(set)
         self._sending_queue:asyncio.Queue[Tuple[Client,Tuple,Dict]] = asyncio.Queue()
 
+        self._update_buffer = UpdateBuffer(self._state_machine,self.send_update)
+
     async def run(self):
+        asyncio.get_event_loop().create_task(self._update_buffer.run())
         while True:
             client,args,kwargs = await self._sending_queue.get()
             try:
@@ -62,8 +66,10 @@ class ClientManager:
         '''
         Handle a client connection. 
         '''
+
         client_id = next(self._client_id_count)
         client = self._clients[client_id] = Client(client_id,ws,self._sending_queue)
+
         try:
             logger.info(f"Client {client_id} connected")
             await client.send_async("hello",id=client_id)
@@ -88,6 +94,9 @@ class ClientManager:
         except ConnectionClosed as e:
             logger.info(f"Client {client_id} disconnected: {repr(e)}")
             self._cleanup_client(client)
+
+    def send_update_or_buffer(self,changes:List[Change],action_id:str):
+        self._update_buffer.add_changes(changes,action_id)
 
     def send_update(self,changes:List[Change],action_id:str):
         '''
@@ -115,6 +124,9 @@ class ClientManager:
             #? Should we send a message to the client?
             logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
+        
+        self._update_buffer.flush() # clear the buffer before sending `init` so the client starts at a correct state
+
         self._subscriptions[topic_name].add(sender.id)
         logger.debug(f"Client {sender.id} subscribed to {topic_name}")
         msg = self._state_machine.get_topic(topic_name).get_init_message()

@@ -176,6 +176,9 @@ class SimpleAction:
 
 class Clock:
     def __init__(self, interval: float):
+        '''
+        Interval is in seconds.
+        '''
         self.interval = interval
         self.on_tick = SimpleAction()
 

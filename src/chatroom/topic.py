@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+from calendar import c
+import collections
 import copy
 import json
 import logging
@@ -142,6 +144,13 @@ class Topic(metaclass = abc.ABCMeta):
 
     def is_stateful(self):
         return self._is_stateful
+    
+    def merge_changes(self,changes:List[Change]):
+        '''
+        Merge consecutive changes to save network or computation resources. 
+        Override this method in child classes to merge changes of different types.
+        '''
+        return changes
 
 T = TypeVar('T')
 class GenericTopic(Topic,Generic[T]):
@@ -184,6 +193,26 @@ class StringTopic(Topic):
         This method will throw if version isn't valid (isn't recorded by the topic)
         '''
         return self.changes[self.version_to_index[version] + 1:]
+    
+    def merge_changes(self,changes:List[Change]):
+        stack: collections.deque[Change] = collections.deque()
+        for change in changes:
+            if isinstance(change, StringChangeTypes.SetChange):
+                #  Overwrite all InsertChange or DeleteChange.
+                while len(stack) and not isinstance(stack[-1], StringChangeTypes.SetChange):
+                    stack.pop()
+                if len(stack): # top is a SetChange
+                    stack[-1].value = change.value # type: ignore # stack[-1] must be a SetChange
+                    stack[-1].id = change.id
+                    continue
+                else: # stack is empty
+                    stack.append(change)
+                    continue
+            else:
+                stack.append(change)
+                continue
+            
+        return stack
     
     def set(self, value):
         if value == self._value:
@@ -308,6 +337,26 @@ class ListTopic(Topic):
         self.add_validator(type_validator(list))
         self.on_insert = Action()
         self.on_pop = Action()
+
+    def merge_changes(self, changes: List[Change]):
+        stack: collections.deque[Change] = collections.deque()
+        for change in changes:
+            if isinstance(change, ListChangeTypes.SetChange):
+                #  Overwrite all InsertChange or DeleteChange.
+                while len(stack) and not isinstance(stack[-1], ListChangeTypes.SetChange):
+                    stack.pop()
+                if len(stack):  # top is a SetChange
+                    stack[-1].value = change.value  # type: ignore # stack[-1] must be a SetChange
+                    stack[-1].id = change.id
+                    continue
+                else:  # stack is empty
+                    stack.append(change)
+                    continue
+            else:
+                stack.append(change)
+                continue
+
+        return stack
     
     def set(self, value):
         if value == self._value:

@@ -1,5 +1,6 @@
 import asyncio
 import os
+import traceback
 from typing import Any, Callable, Dict, List, TypeVar
 import logging
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class ChatroomServer:
     """
 
     def _changes_callback(self, changes:List[Change],actionID:str):
-        self._client_manager.send_update(changes,actionID)
+        self._client_manager.send_update_or_buffer(changes,actionID)
 
     def _add_topic_raw(self,topic_name,props):
         self._state_machine.add_topic_s(topic_name,props["type"],props["is_stateful"],props["boundary_value"])
@@ -77,6 +78,8 @@ class ChatroomServer:
 
         except Exception as e:
             sender.send("reject",reason=repr(e))
+            tb = traceback.format_exc()
+            logger.warning(f"Error when handling action {action_id} from client {sender.id}:\n{tb}")
 
     def _handle_request(self, sender:Client, service_name, args, request_id):
         """
