@@ -74,13 +74,13 @@ class TestStringDiffChange(unittest.TestCase):
         change1, change2 = topic_change_gen(topic.get_name(), topic.version)
         topic.apply_change(change1)
         topic.apply_change(change2)
-        assert topic.get() == result12
+        self.assertEqual(topic.get(), result12)
 
         topic = StringTopic('test', None, init_value=original)
         change1, change2 = topic_change_gen(topic.get_name(), topic.version)
         topic.apply_change(change2)
         topic.apply_change(change1)
-        assert topic.get() == result21
+        self.assertEqual(topic.get(), result21)
 
     def test_2_insert(self):
         # the order of insertions on different position won't affect the result

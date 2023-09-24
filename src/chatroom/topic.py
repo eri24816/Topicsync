@@ -58,7 +58,7 @@ class Topic(metaclass = abc.ABCMeta):
             if not validator(new_value,change):
                 # If self._value is immutable, this line is not nessesary.
                 # But if self._value is mutable, we need to revert the change.
-                self._value = change.inverse().apply(self._value)
+                self._value = change.inverse().apply(new_value)
                 raise InvalidChangeError(change,'Validator failed') #TODO: Add more info
         
         return new_value
@@ -183,10 +183,11 @@ class StringTopic(Topic):
 
     def _validate_change_and_get_result(self,change:Change):
         result_version = change.exchange_topic_version(self.version, self)
+        result = super()._validate_change_and_get_result(change)
         self.version_to_index[result_version] = len(self.changes)
         self.changes.append(change)
         self.version = result_version
-        return super()._validate_change_and_get_result(change)
+        return result
 
     def changes_from(self, version: str) -> Iterable[Change]:
         '''

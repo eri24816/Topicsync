@@ -90,7 +90,6 @@ class StateMachine:
 
     @contextmanager
     def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True,phase:Phase = Phase.FORWARDING):
-        #TODO: thread lock
         if self._is_recording:
             if not allow_reentry:
                 raise RuntimeError("Cannot call record while already recording")

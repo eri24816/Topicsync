@@ -112,7 +112,6 @@ class ChatroomServer:
         """
         self._services[service_name] = Service(callback,pass_sender)
 
-    #TODO: allow specify auto/manual
     def on(self, event_name: str, callback: Callable, inverse_callback: Callable|None = None, is_stateful: bool = True,auto=False):
         """
         Register a callback for a event.
