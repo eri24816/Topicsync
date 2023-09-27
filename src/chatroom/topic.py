@@ -196,15 +196,18 @@ class StringTopic(Topic):
         return self.changes[self.version_to_index[version] + 1:]
     
     def merge_changes(self,changes:List[Change]):
-        stack: collections.deque[Change] = collections.deque()
+        stack = collections.deque[Change]()
         for change in changes:
             if isinstance(change, StringChangeTypes.SetChange):
                 #  Overwrite all InsertChange or DeleteChange.
                 while len(stack) and not isinstance(stack[-1], StringChangeTypes.SetChange):
                     stack.pop()
                 if len(stack): # top is a SetChange
-                    stack[-1].value = change.value # type: ignore # stack[-1] must be a SetChange
-                    stack[-1].id = change.id
+                    if stack[-1].old_value == change.value: # type: ignore # stack[-1] must be a SetChange
+                        stack.pop()
+                    else:
+                        stack[-1].value = change.value # type: ignore # stack[-1] must be a SetChange
+                        stack[-1].id = change.id
                     continue
                 else: # stack is empty
                     stack.append(change)
@@ -212,7 +215,7 @@ class StringTopic(Topic):
             else:
                 stack.append(change)
                 continue
-            
+        
         return stack
     
     def set(self, value):

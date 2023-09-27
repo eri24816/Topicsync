@@ -43,8 +43,6 @@ class UpdateBuffer:
         for topic_name, changes in self._to_send_later.items():
             if len(changes) > 1:
                 merged_changes += self._state_machine.get_topic(topic_name).merge_changes(changes)
-            else:
-                merged_changes += changes
 
         #send changes
         self._send_update(merged_changes,'clock')

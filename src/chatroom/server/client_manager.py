@@ -122,7 +122,7 @@ class ClientManager:
         if not self._state_machine.has_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
             #? Should we send a message to the client?
-            logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
+            #logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         
         self._update_buffer.flush() # clear the buffer before sending `init` so the client starts at a correct state
