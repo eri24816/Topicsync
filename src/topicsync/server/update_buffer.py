@@ -40,7 +40,7 @@ class UpdateBuffer:
         #merge changes with same topic name
         merged_changes: List[Change] = []
 
-        for topic_name, changes in self._to_send_later.items():
+        for topic_name, changes in self._to_send_later.copy().items():
             merged_changes += self._state_machine.get_topic(topic_name).merge_changes(changes)
 
         #send changes
