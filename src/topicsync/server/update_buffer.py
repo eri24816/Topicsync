@@ -1,9 +1,9 @@
 
 from typing import Callable, DefaultDict, Dict, List
-from chatroom.change import Change
-from chatroom.state_machine.state_machine import StateMachine
-from chatroom.topic import DictTopic
-from chatroom.utils import Clock, astype
+from topicsync.change import Change
+from topicsync.state_machine.state_machine import StateMachine
+from topicsync.topic import DictTopic
+from topicsync.utils import Clock, astype
 import logging
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class UpdateBuffer:
         self._clock.on_tick += self.flush
 
         # prevent problems when topic added or removed
-        self.topic_dict = astype(self._state_machine.get_topic('_chatroom/topic_list'),DictTopic)
+        self.topic_dict = astype(self._state_machine.get_topic('_topicsync/topic_list'),DictTopic)
         self.topic_dict.on_remove += self.on_topic_remove
 
     async def run(self):

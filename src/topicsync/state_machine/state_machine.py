@@ -3,7 +3,7 @@ from doctest import debug
 import enum
 import logging
 
-from chatroom.state_machine.changes_tree import ChangesTree, Tag
+from topicsync.state_machine.changes_tree import ChangesTree, Tag
 logger = logging.getLogger(__name__)
 import threading
 import traceback
@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, TypeVar
 from contextlib import contextmanager, nullcontext
 from typing import Any, Callable, List
 
-from chatroom.change import EventChangeTypes, NullChange
-from chatroom.topic import Topic, topic_factory
-from chatroom.state_machine.transition_tree import TransitionTree
+from topicsync.change import EventChangeTypes, NullChange
+from topicsync.topic import Topic, topic_factory
+from topicsync.state_machine.transition_tree import TransitionTree
 if TYPE_CHECKING:
-    from chatroom.change import Change
+    from topicsync.change import Change
 
 class Transition:
     def __init__(self,changes:List[Change],action_source:int):

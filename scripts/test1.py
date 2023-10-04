@@ -1,11 +1,11 @@
 
-from chatroom import ChatroomServer, HistoryManager
+from topicsync import TopicsyncServer, HistoryManager
 
 import asyncio
 
-from chatroom.topic import FloatTopic, IntTopic, StringTopic, SetTopic, GenericTopic
+from topicsync.topic import FloatTopic, IntTopic, StringTopic, SetTopic, GenericTopic
 
-server = ChatroomServer(8765)
+server = TopicsyncServer(8765)
 
 a=server.add_topic('a',FloatTopic)
 b=server.add_topic('b',FloatTopic)

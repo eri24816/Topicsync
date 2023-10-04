@@ -7,7 +7,7 @@ from websockets.server import WebSocketServerProtocol, serve
 import asyncio
 from os.path import join
 
-from chatroom.state_machine.changes_tree import ChangesTree
+from topicsync.state_machine.changes_tree import ChangesTree
 
 here = __file__.replace("debugger.py", "")
 

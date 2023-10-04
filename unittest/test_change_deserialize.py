@@ -1,5 +1,5 @@
 import unittest
-from chatroom.change import *
+from topicsync.change import *
 
 
 # Test deserialize of concrete changes

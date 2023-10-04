@@ -6,8 +6,8 @@ from enum import Enum
 from typing import Callable, List
 from contextlib import contextmanager
 
-from chatroom.change import Change
-from chatroom.topic import Topic
+from topicsync.change import Change
+from topicsync.topic import Topic
 
 class Tag(Enum):
     AUTO = 0

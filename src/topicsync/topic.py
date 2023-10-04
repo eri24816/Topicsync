@@ -8,12 +8,12 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, List, TypeVar, Dict
-from chatroom.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
-from chatroom.utils import Action, camel_to_snake
+from topicsync.change import DictChangeTypes, EventChangeTypes, GenericChangeTypes, Change, IntChangeTypes, InvalidChangeError, ListChangeTypes, StringChangeTypes, SetChangeTypes, FloatChangeTypes, default_topic_value, type_validator
+from topicsync.utils import Action, camel_to_snake
 import abc
 
 if TYPE_CHECKING:
-    from chatroom.state_machine.state_machine import StateMachine
+    from topicsync.state_machine.state_machine import StateMachine
 
 def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None) -> Topic:
     '''

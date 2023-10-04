@@ -2,11 +2,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 import copy
 
-from chatroom.utils import IdGenerator
-from chatroom.string_diff import insert, delete, adjust_delete, extend_delete
+from topicsync.utils import IdGenerator
+from topicsync.string_diff import insert, delete, adjust_delete, extend_delete
 
 if TYPE_CHECKING:
-    from chatroom.topic import Topic, StringTopic
+    from topicsync.topic import Topic, StringTopic
 '''
 Change is a class that represents a change to a topic. It can be serialized and be passed between clients and the server.
 When the client wants to change a topic, it creates a Change object and sends it to the server. The server then applies the change to the topic (if it's valid).

@@ -5,9 +5,9 @@ The transition tree is used by StateMachine.record() to keep track of the change
 from typing import Callable, List
 from contextlib import contextmanager
 
-from chatroom.change import Change
-from chatroom.topic import Topic
-from chatroom.state_machine.changes_tree import ChangesTree, Tag
+from topicsync.change import Change
+from topicsync.topic import Topic
+from topicsync.state_machine.changes_tree import ChangesTree, Tag
 
 class Node:
     def __init__(self,parent:'Node|RootNode',change:Change,get_topic:Callable[[str],Topic],changes_list:List[Change],changes_tree:ChangesTree):

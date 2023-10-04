@@ -1,7 +1,7 @@
 import unittest
-from chatroom.state_machine.state_machine import StateMachine
-from chatroom.topic import StringTopic
-from chatroom.change import StringChangeTypes
+from topicsync.state_machine.state_machine import StateMachine
+from topicsync.topic import StringTopic
+from topicsync.change import StringChangeTypes
 
 class MyTestCase(unittest.TestCase):
     '''

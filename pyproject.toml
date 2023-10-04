@@ -1,11 +1,33 @@
+[project]
+
+authors = [
+    { name = "eri24816", email = "a931eric@gmail.com" },
+    { name = "secminhr", email = "secminhrian@gmail.com" },
+    { name = "peterxcli", email = "peterxcli@gmail.com" },
+]
+
+maintainers = [
+    "eri24816 <a931eric@gmail.com>",
+]
+
 [tool.poetry]
-name = "chatroom"
-version = "0.6.1"
-description = ""
-authors = ["peterxcli <peterxcli@gmail.com>"]
+name = "topicsync"
+version = "0.7.0"
+description = "A communication tool for multi-client applications over WebSockets."
+
+authors = [
+    "eri24816 <a931eric@gmail.com>",
+    "secminhr <secminhrian@gmail.com>",
+    "peterxcli <peterxcli@gmail.com>", 
+]
+
+maintainers = [
+    "eri24816 <a931eric@gmail.com>",
+]
+
 packages = [
-    { include = "chatroom", from = "src" },
-    { include = "chatroom_debugger", from = "src" },
+    { include = "topicsync", from = "src" },
+    { include = "topicsync_debugger", from = "src" },
 ]
 
 [tool.poetry.dependencies]

@@ -1,8 +1,8 @@
 import unittest
-from chatroom.state_machine import state_machine
-from chatroom.state_machine.state_machine import StateMachine
-from chatroom.topic import EventTopic, StringTopic
-from chatroom.change import InvalidChangeError
+from topicsync.state_machine import state_machine
+from topicsync.state_machine.state_machine import StateMachine
+from topicsync.topic import EventTopic, StringTopic
+from topicsync.change import InvalidChangeError
 
 class StateMachineTransition(unittest.TestCase):
     def test_simple_transition(self):
@@ -242,7 +242,7 @@ class StateMachineTransition(unittest.TestCase):
         self.assertEqual(a.get(), 'newa')
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[-1])),['a'])
 
-from chatroom import HistoryManager
+from topicsync import HistoryManager
 class UndoRedo(unittest.TestCase):
     def test_undo_redo(self):
         history = HistoryManager()
@@ -308,11 +308,11 @@ class UndoRedo(unittest.TestCase):
 
         with machine.record():
             c.set('owo')
-            a.set('chatroom')
+            a.set('topicsync')
 
-        self.assertEqual(a.get(),'chatroom')
-        self.assertEqual(b.get(),'hello chatroom')
-        self.assertEqual(c.get(),'hello chatroom!')
+        self.assertEqual(a.get(),'topicsync')
+        self.assertEqual(b.get(),'hello topicsync')
+        self.assertEqual(c.get(),'hello topicsync!')
 
         history.undo()
         self.assertEqual(a.get(),'world')
@@ -330,9 +330,9 @@ class UndoRedo(unittest.TestCase):
         self.assertEqual(c.get(),'uwu!')
 
         history.redo()
-        self.assertEqual(a.get(),'chatroom')
-        self.assertEqual(b.get(),'hello chatroom')
-        self.assertEqual(c.get(),'hello chatroom!')
+        self.assertEqual(a.get(),'topicsync')
+        self.assertEqual(b.get(),'hello topicsync')
+        self.assertEqual(c.get(),'hello topicsync!')
 
 class RunAfterTransition(unittest.TestCase):
 

@@ -2,9 +2,9 @@
 import asyncio
 import json
 import logging
-from chatroom.server.update_buffer import UpdateBuffer
+from topicsync.server.update_buffer import UpdateBuffer
 
-from chatroom.state_machine.state_machine import StateMachine
+from topicsync.state_machine.state_machine import StateMachine
 logger = logging.getLogger(__name__)
 import traceback
 from typing import Awaitable, Callable, Dict, List, Tuple
@@ -13,7 +13,7 @@ from collections import defaultdict
 
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
-from chatroom.change import Change, SetChange
+from topicsync.change import Change, SetChange
 
 def make_message(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})

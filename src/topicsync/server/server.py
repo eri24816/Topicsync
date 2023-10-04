@@ -6,17 +6,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 from websockets.server import serve as websockets_serve
-from chatroom.state_machine import state_machine
+from topicsync.state_machine import state_machine
 
-from chatroom.server.client_manager import ClientManager, Client
-from chatroom.service import Service
-from chatroom.state_machine.state_machine import StateMachine, Transition
-from chatroom.topic import DictTopic, EventTopic, Topic, SetTopic
-from chatroom.change import Change
+from topicsync.server.client_manager import ClientManager, Client
+from topicsync.service import Service
+from topicsync.state_machine.state_machine import StateMachine, Transition
+from topicsync.topic import DictTopic, EventTopic, Topic, SetTopic
+from topicsync.change import Change
 
-from chatroom_debugger import Debugger
+from topicsync_debugger import Debugger
 
-class ChatroomServer:
+class TopicsyncServer:
     def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None) -> None:
         self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
         self._port = port
@@ -25,8 +25,8 @@ class ChatroomServer:
         self._debugger = Debugger(8800,'localhost') if self.debug else None
         self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree if self.debug else None)
 
-        self._topic_list = self._state_machine.add_topic("_chatroom/topic_list",DictTopic,is_stateful=True,init_value=
-                                                         {'_chatroom/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
+        self._topic_list = self._state_machine.add_topic("_topicsync/topic_list",DictTopic,is_stateful=True,init_value=
+                                                         {'_topicsync/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
                                                          )
         self._topic_list.on_add += self._add_topic_raw
         self._topic_list.on_remove += self._remove_topic_raw

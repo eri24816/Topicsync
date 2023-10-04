@@ -1,6 +1,6 @@
 import unittest
-from chatroom.topic import StringTopic
-from chatroom.change import StringChangeTypes, InvalidChangeError, Change
+from topicsync.topic import StringTopic
+from topicsync.change import StringChangeTypes, InvalidChangeError, Change
 
 from typing import Callable, Tuple
 

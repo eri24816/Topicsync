@@ -1,5 +1,5 @@
-from chatroom.server.server import ChatroomServer
-from chatroom.state_machine.state_machine import StateMachine, Transition
+from topicsync.server.server import TopicsyncServer
+from topicsync.state_machine.state_machine import StateMachine, Transition
 
 
 class HistoryManager:
@@ -10,8 +10,8 @@ class HistoryManager:
         self._history = []
         self._current_ptr = -1
     
-    def set_server(self,chatroom:ChatroomServer|StateMachine):
-        self._chatroom = chatroom
+    def set_server(self,topicsync:TopicsyncServer|StateMachine):
+        self._topicsync = topicsync
 
     def add_transition(self,transition:Transition):
         self._current_ptr += 1
@@ -20,10 +20,10 @@ class HistoryManager:
         
     def undo(self):
         if len(self._history) > 0 and self._current_ptr >= 0:
-            self._chatroom.undo(self._history[self._current_ptr])
+            self._topicsync.undo(self._history[self._current_ptr])
             self._current_ptr -= 1
 
     def redo(self):
         if self._current_ptr < len(self._history)-1:
             self._current_ptr += 1
-            self._chatroom.redo(self._history[self._current_ptr])
+            self._topicsync.redo(self._history[self._current_ptr])

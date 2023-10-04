@@ -12,12 +12,12 @@ A topic stores a piece of data that is synchronized across clients. Clients can 
 
 ### Special Topics
 
-Special topics are those with their names begin with `_chatroom/`.
+Special topics are those with their names begin with `_topicsync/`.
 
-* `_chatroom/server_status` 
+* `_topicsync/server_status` 
 
     A status string describing the server's nearest event.
-* `_chatroom/client_message/<client_id>` 
+* `_topicsync/client_message/<client_id>` 
     
     Debug messages (string) to clients. Clients subscribe to it to receive debug messages.
 
@@ -27,7 +27,7 @@ Using a service, a client can call a function in another client and get the retu
 
 ### Special Services
 
-Special services are those with their names begin with `_chatroom/`.
+Special services are those with their names begin with `_topicsync/`.
 
 ## Debugging
 
