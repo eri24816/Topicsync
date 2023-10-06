@@ -257,6 +257,30 @@ class IntTopic(Topic):
     def add(self, value:int):
         change = IntChangeTypes.AddChange(self._name,value)
         self.apply_change_external(change)
+
+    def merge_changes(self,changes:List[Change]):
+        stack = collections.deque[Change]()
+        for change in changes:
+            if isinstance(change, IntChangeTypes.SetChange):
+                #  Overwrite all InsertChange or DeleteChange.
+                while len(stack) and not isinstance(stack[-1], IntChangeTypes.SetChange):
+                    stack.pop()
+                if len(stack): # top is a SetChange
+                    if stack[-1].old_value == change.value: # type: ignore # stack[-1] must be a SetChange
+                        stack.pop()
+                    else:
+                        stack[-1].value = change.value # type: ignore # stack[-1] must be a SetChange
+                        stack[-1].id = change.id
+                    continue
+                else: # stack is empty
+                    stack.append(change)
+                    continue
+            else:
+                stack.append(change)
+                continue
+        
+        return stack
+    
         
 class FloatTopic(Topic):
     '''
