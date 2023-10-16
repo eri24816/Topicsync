@@ -5,6 +5,7 @@ import logging
 from topicsync.server.update_buffer import UpdateBuffer
 
 from topicsync.state_machine.state_machine import StateMachine
+from topicsync.utils import SimpleAction
 logger = logging.getLogger(__name__)
 import traceback
 from typing import Awaitable, Callable, Dict, List, Tuple
@@ -49,6 +50,7 @@ class ClientManager:
         self._sending_queue:asyncio.Queue[Tuple[Client,Tuple,Dict]] = asyncio.Queue()
 
         self._update_buffer = UpdateBuffer(self._state_machine,self.send_update)
+        self.on_client_connect = SimpleAction()
 
     async def run(self):
         asyncio.get_event_loop().create_task(self._update_buffer.run())
@@ -73,6 +75,7 @@ class ClientManager:
         try:
             logger.info(f"Client {client_id} connected")
             await client.send_async("hello",id=client_id)
+            self.on_client_connect.invoke(client_id)
 
             async for message in ws:
                 logger.debug(f"> {message[:100]}")
@@ -122,7 +125,7 @@ class ClientManager:
         if not self._state_machine.has_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
             #? Should we send a message to the client?
-            #logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
+            logger.info(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         
         self._update_buffer.flush() # clear the buffer before sending `init` so the client starts at a correct state

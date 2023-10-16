@@ -37,7 +37,8 @@ class TopicsyncServer:
 
         self.record = self._state_machine.record
         self.do_after_transition = self._state_machine.do_after_transition
-
+        self.on_client_connect = self._client_manager.on_client_connect
+        self.get_context = self._state_machine.get_context
 
     async def serve(self):
         '''

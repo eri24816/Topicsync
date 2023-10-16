@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from doctest import debug
 import enum
 import logging
@@ -37,7 +38,9 @@ class ErrorState(enum.Enum):
     RECOVERING = 1
     CRITICAL = 2
 
-
+@dataclass
+class Context:
+    action_source: int
 
 class StateMachine:
     def __init__(self, 
@@ -67,6 +70,7 @@ class StateMachine:
         self._max_recursive_depth = 1e4
         self._transition_tree = None
         self._tasks_to_run_after_transition: List[Callable[[],None]] = []
+        self._context: None|Context = None # The context information of the current recording
     
     T = TypeVar('T', bound=Topic)
     def add_topic(self,name:str,topic_type:type[T],is_stateful:bool = True,init_value:Any=None)->T:
@@ -87,6 +91,9 @@ class StateMachine:
     
     def has_topic(self,topic_name:str):
         return topic_name in self._state
+    
+    def get_context(self)->Context:
+        return self._context
 
     @contextmanager
     def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True,phase:Phase = Phase.FORWARDING):
@@ -101,7 +108,7 @@ class StateMachine:
         # Set up the recording
 
         with self._lock:
-
+            self._context = Context(action_source)
             self._is_recording = True
             self._phase = phase
             self._mode = Mode.AUTO
