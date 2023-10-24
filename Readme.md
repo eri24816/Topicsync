@@ -33,6 +33,15 @@ Special services are those with their names begin with `_topicsync/`.
 
 Set DEBUG environment variable to `true` to enable debug mode. Debugger listens on http://localhost:8800.
 
+## Development
+
+To publish
+
+```
+cz bump
+poetry build
+poetry publish
+
 ## Internal Communication API (Outdated, need to be updated later)
 
 The communication between a ChatRoom server and a client is done via a WebSocket connection. Every message has the following format:
