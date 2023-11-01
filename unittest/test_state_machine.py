@@ -364,7 +364,7 @@ class RunAfterTransition(unittest.TestCase):
         self.assertEqual(b.get(),'hello world')
         self.assertEqual(c.get(),'hello !')
 
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['e','a','b'])
         self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['c'])
 
         print(transition_list[1].changes[0].serialize())
@@ -376,13 +376,13 @@ class RunAfterTransition(unittest.TestCase):
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),' world')
         self.assertEqual(c.get(),' !')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['b','a'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['b','a','e'])
 
         machine.redo(transition_list[0])
         self.assertEqual(a.get(),'hello')
         self.assertEqual(b.get(),'hello world')
         self.assertEqual(c.get(),' !')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[4])),['a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[4])),['e','a','b'])
 
         machine.redo(transition_list[1])
         self.assertEqual(a.get(),'hello')

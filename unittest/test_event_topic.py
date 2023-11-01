@@ -40,12 +40,12 @@ class Test(unittest.TestCase):
         self.assertEqual(a.get(),'hello')
         self.assertEqual(b.get(),'hello world')
 
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[0])),['e','a','b'])
 
         machine.undo(transition_list[0])
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),' world')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['e','a','b'])
 
         machine.redo(transition_list[0])
         self.assertEqual(a.get(),'hello')
