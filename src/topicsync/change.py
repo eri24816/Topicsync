@@ -64,6 +64,11 @@ class Change:
     def apply(self, old_value):
         return old_value
     def serialize(self)->dict[str,Any]:
+        '''
+        The serialize() method is used in two purposes:
+        1. To send the change to clients.
+        2. To print the change for debugging purposes.
+        '''
         raise NotImplementedError()
     def inverse(self)->Change:
         '''
@@ -488,7 +493,9 @@ class EventChangeTypes:
         def apply(self,old_value:None):
             return None
         def serialize(self):
-            return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
+            # Because this method is only used for debugging and sending to clients, we don't need to serialize the forward_info.
+            # Additionally, forward_info may be unserializable.
+            return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"id":self.id}
         def inverse(self)->Change:
             return EventChangeTypes.ReversedEmitChange(self.topic_name,self.args,self.forward_info)
         def __eq__(self, other):
@@ -506,7 +513,9 @@ class EventChangeTypes:
             def apply(self,old_value:None):
                 return None
             def serialize(self):
-                return {"topic_name":self.topic_name,"topic_type":"event","type":"reversed_emit","args":self.args,"forward_info":self.forward_info,"id":self.id}
+                # Because this method is only used for debugging and sending to clients, we don't need to serialize the forward_info
+                # Additionally, forward_info may be unserializable.
+                return {"topic_name":self.topic_name,"topic_type":"event","type":"reversed_emit","args":self.args,"id":self.id}
             def inverse(self)->Change:
                 return EventChangeTypes.EmitChange(self.topic_name,self.args)
             def __eq__(self, other):

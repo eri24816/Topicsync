@@ -145,7 +145,7 @@ class TopicsyncServer:
             raise Exception(f"Topic {event_name} does not exist")
         topic = self._state_machine.get_topic(event_name)
         assert isinstance(topic, EventTopic)
-        topic.emit(args)
+        topic.emit(**args)
 
     T = TypeVar("T", bound=Topic)
     def topic(self, topic_name, type: type[T]=Topic) -> T:

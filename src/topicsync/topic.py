@@ -531,13 +531,13 @@ class EventTopic(Topic):
     def set(self, value):
         return # do nothing
 
-    def emit(self,args={}):
+    def emit(self,**args):
         change = EventChangeTypes.EmitChange(self._name,args)
         self.apply_change_external(change)
 
     def notify_listeners(self,auto:bool, change: Change, old_value, new_value):
         '''
-        Not using super().notify_listeners(auto,) because we don't want to call on_set.invoke(auto,) and on_set2.invoke(auto,) for event topics.
+        Not using super().notify_listeners() because we don't want to call on_set.invoke() and on_set2.invoke() for event topics.
         '''
         match change:
             case EventChangeTypes.EmitChange():
