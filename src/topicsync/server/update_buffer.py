@@ -27,7 +27,7 @@ class UpdateBuffer:
         for change in changes:
             if not self._state_machine.has_topic(change.topic_name):
                 continue
-            if self._state_machine.get_topic(change.topic_name).is_stateful():
+            if self._state_machine.get_topic(change.topic_name).is_order_strict():
                 to_send_now.append(change)
             else:
                 self._to_send_later[change.topic_name].append(change)

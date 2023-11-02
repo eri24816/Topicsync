@@ -15,22 +15,23 @@ import abc
 if TYPE_CHECKING:
     from topicsync.state_machine.state_machine import StateMachine
 
-def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None) -> Topic:
+def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None,order_strict=True) -> Topic:
     '''
     Create a topic of the given type.
     '''
-    return all_topic_types[topic_type](name,state_machine,is_stateful,init_value)
+    return all_topic_types[topic_type](name,state_machine,is_stateful,init_value,order_strict)
 
 class Topic(metaclass = abc.ABCMeta):
     @classmethod
     def get_type_name(cls):
         return camel_to_snake(cls.__name__[:-5])
     
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True,init_value=None):
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool = True,init_value=None,order_strict:bool=False):
         self._name = name
         self._validators : List[Callable[[Any,Change],bool]] = []
         self._state_machine = state_machine
         self._is_stateful = is_stateful
+        self._order_strict = order_strict
 
         if init_value is not None:
             self._value = init_value
@@ -145,6 +146,9 @@ class Topic(metaclass = abc.ABCMeta):
     def is_stateful(self):
         return self._is_stateful
     
+    def is_order_strict(self):
+        return self._order_strict
+    
     def merge_changes(self,changes:List[Change]):
         '''
         Merge consecutive changes to save network or computation resources. 
@@ -157,8 +161,8 @@ class GenericTopic(Topic,Generic[T]):
     '''
     Topic of any/generic type (as long as it is JSON serializable)
     '''
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
     
     def set(self, value:T):
         if value == self._value:
@@ -170,8 +174,8 @@ class StringTopic(Topic):
     '''
     String topic
     '''
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.add_validator(type_validator(str))
 
         self.version = f"{name}_init"
@@ -244,8 +248,8 @@ class IntTopic(Topic):
     '''
     Int topic
     '''
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.add_validator(type_validator(int))
     
     def set(self, value:int):
@@ -286,8 +290,8 @@ class FloatTopic(Topic):
     '''
     Int topic
     '''
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         
         self.add_validator(type_validator(float,int))
         self.on_set = Action()
@@ -304,8 +308,8 @@ class FloatTopic(Topic):
 
 class SetTopic(Topic):
     
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.add_validator(type_validator(list))
         self.on_append = Action()
         self.on_remove = Action()
@@ -360,8 +364,8 @@ class ListTopic(Topic):
         '''
         return len(set(new_value)) == len(new_value)
 
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.add_validator(type_validator(list))
         self.on_insert = Action()
         self.on_pop = Action()
@@ -438,8 +442,8 @@ class ListTopic(Topic):
                 raise Exception(f'Unsupported change type {type(change)} for {self.__class__.__name__}')
 
 class DictTopic(Topic):
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.add_validator(type_validator(dict))
         self.on_set = Action()
         self.on_set2 = Action()
@@ -523,8 +527,8 @@ class EventTopic(Topic):
     '''
     Event topic
     '''
-    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None):
-        super().__init__(name,state_machine,is_stateful,init_value)
+    def __init__(self,name,state_machine:StateMachine,is_stateful:bool=True,init_value=None,order_strict=True):
+        super().__init__(name,state_machine,is_stateful,init_value,order_strict)
         self.on_emit = Action()
         self.on_reverse = Action()
     
