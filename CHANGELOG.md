@@ -1,3 +1,10 @@
+## v0.8.0 (2023-11-03)
+
+### Feat
+
+- add order_strict attribute to topic
+- also send EmitTopic's changes to client
+
 ## v0.7.1 (2023-10-25)
 
 ### Fix
