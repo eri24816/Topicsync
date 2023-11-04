@@ -15,9 +15,13 @@ from collections import defaultdict
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
 from topicsync.change import Change, SetChange
+import bson
 
 def make_message(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
+
+def make_message_bson(message_type,**kwargs)->bytes:
+    return bson.dumps({"type":message_type,"args":kwargs})
 
 def parse_message(message_json)->Tuple[str,dict]:
     message = json.loads(message_json)
@@ -34,6 +38,7 @@ class Client:
         logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
+        #await self._send_raw(make_message_bson(*args,**kwargs))
         await self._send_raw(make_message(*args,**kwargs))
 
     def send(self,*args,**kwargs):
@@ -125,7 +130,7 @@ class ClientManager:
         if not self._state_machine.has_topic(topic_name):
             # This happens when a removal message of the topic is not yet arrived at the client
             #? Should we send a message to the client?
-            logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
+            #logger.warning(f"Client {sender.id} tried to subscribe to non-existing topic {topic_name}")
             return
         
         self._update_buffer.flush() # clear the buffer before sending `init` so the client starts at a correct state
