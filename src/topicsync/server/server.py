@@ -187,3 +187,6 @@ class TopicsyncServer:
 
     def redo(self,transition:Transition):
         self._state_machine.redo(transition)
+
+    def phase(self):
+        return self._state_machine._phase
