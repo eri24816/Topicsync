@@ -82,7 +82,7 @@ class TopicsyncServer:
             tb = traceback.format_exc()
             logger.warning(f"Error when handling action {action_id} from client {sender.id}:\n{tb}")
 
-    def _handle_request(self, sender:Client, service_name, args, request_id):
+    async def _handle_request(self, sender:Client, service_name, args, request_id):
         """
         Handle a request from a client
         """
@@ -91,6 +91,8 @@ class TopicsyncServer:
             args["sender"] = sender.id
         try:
             response = service.callback(**args)
+            if asyncio.iscoroutine(response):
+                response = await response
         except Exception as e:
             # at least send a response to the client so it can free the sent request list
             sender.send("response",response="request failed",request_id=request_id)
