@@ -1,3 +1,9 @@
+## v0.11.0 (2023-12-10)
+
+### Feat
+
+- add support for async request handler
+
 ## v0.10.0 (2023-12-01)
 
 ### Feat
