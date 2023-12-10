@@ -15,13 +15,9 @@ from collections import defaultdict
 from websockets.server import WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
 from topicsync.change import Change, SetChange
-import bson
 
 def make_message(message_type,**kwargs)->str:
     return json.dumps({"type":message_type,"args":kwargs})
-
-def make_message_bson(message_type,**kwargs)->bytes:
-    return bson.dumps({"type":message_type,"args":kwargs})
 
 def parse_message(message_json)->Tuple[str,dict]:
     message = json.loads(message_json)
@@ -38,7 +34,6 @@ class Client:
         logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
-        #await self._send_raw(make_message_bson(*args,**kwargs))
         await self._send_raw(make_message(*args,**kwargs))
 
     def send(self,*args,**kwargs):
