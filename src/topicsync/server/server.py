@@ -38,7 +38,9 @@ class TopicsyncServer:
         self.record = self._state_machine.record
         self.do_after_transition = self._state_machine.do_after_transition
         self.on_client_connect = self._client_manager.on_client_connect
-        self.get_context = self._state_machine.get_context
+        self.on_client_disconnect = self._client_manager.on_client_disconnect
+
+        self._action_source = 0
 
     async def serve(self):
         '''
@@ -71,6 +73,7 @@ class TopicsyncServer:
     """
 
     def _handle_action(self, sender:Client, commands: list[dict[str, Any]],action_id:str):
+        self._action_source = sender.id
         try:
             with self._state_machine.record(action_source=sender.id,action_id=action_id):
                 for command_dict in commands:
@@ -86,6 +89,7 @@ class TopicsyncServer:
         """
         Handle a request from a client
         """
+        self._action_source = sender.id
         service = self._services[service_name]
         if service.pass_client_id:
             args["sender"] = sender.id
@@ -192,3 +196,6 @@ class TopicsyncServer:
 
     def phase(self):
         return self._state_machine._phase
+    
+    def get_action_source(self):
+        return self._action_source

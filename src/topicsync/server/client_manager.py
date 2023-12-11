@@ -51,6 +51,7 @@ class ClientManager:
 
         self._update_buffer = UpdateBuffer(self._state_machine,self.send_update)
         self.on_client_connect = SimpleAction()
+        self.on_client_disconnect = SimpleAction()
 
     async def run(self):
         asyncio.get_event_loop().create_task(self._update_buffer.run())
@@ -120,6 +121,7 @@ class ClientManager:
     def _cleanup_client(self,client:Client):
         for topic in self._subscriptions:
             self._subscriptions[topic].discard(client.id)
+        self.on_client_disconnect.invoke(client.id)
 
     def _handle_subscribe(self,sender:Client,topic_name:str):
         if not self._state_machine.has_topic(topic_name):
