@@ -1,3 +1,9 @@
+## v0.11.3 (2023-12-12)
+
+### Fix
+
+- no send ReversedEmitChange to frontend
+
 ## v0.11.2 (2023-12-11)
 
 ### Fix
