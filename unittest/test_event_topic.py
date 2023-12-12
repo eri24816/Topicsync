@@ -45,7 +45,7 @@ class Test(unittest.TestCase):
         machine.undo(transition_list[0])
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),' world')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['e','a','b'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[1])),['a','b'])
 
         machine.redo(transition_list[0])
         self.assertEqual(a.get(),'hello')

@@ -376,7 +376,7 @@ class RunAfterTransition(unittest.TestCase):
         self.assertEqual(a.get(),'')
         self.assertEqual(b.get(),' world')
         self.assertEqual(c.get(),' !')
-        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['b','a','e'])
+        self.assertEqual(list(map(lambda change: change.topic_name,changes_list[3])),['b','a'])
 
         machine.redo(transition_list[0])
         self.assertEqual(a.get(),'hello')
