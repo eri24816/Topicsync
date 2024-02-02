@@ -8,12 +8,10 @@ from topicsync.state_machine.state_machine import StateMachine
 from topicsync.utils import SimpleAction
 logger = logging.getLogger(__name__)
 import traceback
-from typing import Awaitable, Callable, Dict, List, Tuple
+from typing import Awaitable, Callable, Dict, List, Tuple, AsyncIterator, Protocol
 from itertools import count
 from collections import defaultdict
 
-from websockets.server import WebSocketServerProtocol
-from websockets.exceptions import ConnectionClosed
 from topicsync.change import Change, SetChange
 
 def make_message(message_type,**kwargs)->str:
@@ -23,14 +21,28 @@ def parse_message(message_json)->Tuple[str,dict]:
     message = json.loads(message_json)
     return message["type"],message["args"]
 
+class ClientCommProtocol(Protocol):
+    def messages(self) -> AsyncIterator[str]:
+        pass
+
+    async def send(self, message):
+        pass
+
+class ConnectionClosedException(Exception):
+    def __init__(self, concrete_exception: Exception):
+        self._inner_exception = concrete_exception
+
+    def __repr__(self):
+        return repr(self._inner_exception)
+
 class Client:
-    def __init__(self,id,ws:WebSocketServerProtocol,sending_queue:asyncio.Queue[Tuple['Client',Tuple,Dict]]):
+    def __init__(self, id, comm: ClientCommProtocol, sending_queue:asyncio.Queue[Tuple['Client',Tuple,Dict]]):
         self.id = id
-        self._ws = ws
+        self._comm = comm
         self._sending_queue = sending_queue
 
     async def _send_raw(self,message):
-        await self._ws.send(message)
+        await self._comm.send(message)
         logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
@@ -39,6 +51,11 @@ class Client:
     def send(self,*args,**kwargs):
         self._sending_queue.put_nowait((self,args,kwargs))
 
+    @property
+    def messages(self) -> AsyncIterator[str]:
+        return self._comm.messages()
+
+ClientCommFactory = Callable[[], ClientCommProtocol]
 class ClientManager:
     def __init__(self,state_machine:StateMachine) -> None:
         self._state_machine = state_machine
@@ -59,26 +76,27 @@ class ClientManager:
             client,args,kwargs = await self._sending_queue.get()
             try:
                 await client.send_async(*args,**kwargs)
-            except ConnectionClosed:
+            except ConnectionClosedException:
                 self._cleanup_client(client)
 
     def send(self,client:Client,*args,**kwargs):
         self._sending_queue.put_nowait((client,args,kwargs))
 
-    async def handle_client(self,ws:WebSocketServerProtocol,path):
+
+    async def handle_client(self, client_comm_factory: ClientCommFactory):
         '''
         Handle a client connection. 
         '''
 
         client_id = next(self._client_id_count)
-        client = self._clients[client_id] = Client(client_id,ws,self._sending_queue)
+        client = self._clients[client_id] = Client(client_id, client_comm_factory(), self._sending_queue)
 
         try:
             logger.info(f"Client {client_id} connected")
             await client.send_async("hello",id=client_id)
             self.on_client_connect.invoke(client_id)
 
-            async for message in ws:
+            async for message in client.messages:
                 logger.debug(f"> {message[:100]}")
 
                 message_type, args = parse_message(message)
@@ -95,7 +113,7 @@ class ClientManager:
                     #TODO: send error message to client
                     continue
 
-        except ConnectionClosed as e:
+        except ConnectionClosedException as e:
             logger.info(f"Client {client_id} disconnected: {repr(e)}")
             self._cleanup_client(client)
 

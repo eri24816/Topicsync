@@ -1,14 +1,17 @@
 import asyncio
 import os
 import traceback
-from typing import Any, Callable, Dict, List, TypeVar
+from typing import Any, Callable, Dict, List, TypeVar, Optional, Awaitable, AsyncIterator, Protocol
 import logging
 logger = logging.getLogger(__name__)
 
 from websockets.server import serve as websockets_serve
+from websockets.server import WebSocketServerProtocol
+from websockets.exceptions import ConnectionClosed
 from topicsync.state_machine import state_machine
 
-from topicsync.server.client_manager import ClientManager, Client
+from topicsync.server.client_manager import ClientManager, Client, ClientCommProtocol, ConnectionClosedException, \
+    ClientCommFactory
 from topicsync.service import Service
 from topicsync.state_machine.state_machine import StateMachine, Transition
 from topicsync.topic import DictTopic, EventTopic, Topic, SetTopic
@@ -16,21 +19,38 @@ from topicsync.change import Change
 
 from topicsync_debugger import Debugger
 
-class TopicsyncServer:
-    def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None) -> None:
-        self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
-        self._port = port
-        self._host = host
-        self._services: Dict[str, Service] = {}
-        self._debugger = Debugger(8800,'localhost') if self.debug else None
-        self._state_machine = StateMachine(self._changes_callback,transition_callback,self._debugger.push_changes_tree if self.debug else None)
 
-        self._topic_list = self._state_machine.add_topic("_topicsync/topic_list",DictTopic,is_stateful=True,init_value=
-                                                         {'_topicsync/topic_list':{"type":"dict","is_stateful":True,"boundary_value":{}}}
+class ClientServer(Protocol):
+    async def serve(self, handle_client: Callable[[ClientCommFactory], Awaitable[ClientCommProtocol]]):
+        pass
+
+
+class TopicsyncServer:
+    # The init stays the same for backwards compatibility
+    # though I would recommend to replace it with _initialize
+    def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None, client_server: Optional[ClientServer] = None) -> None:
+        self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
+        debugger = Debugger(8800, 'localhost') if self.debug else None
+        if client_server:
+            self._initialize(client_server, debugger, transition_callback)
+        else:
+            self._initialize(WsClientServer(port, host), debugger, transition_callback)
+
+    def _initialize(self, client_server: ClientServer, debugger: Optional[Debugger], transition_callback):
+        self.client_server = client_server
+        self._services: Dict[str, Service] = {}
+        self._debugger = debugger
+        self._state_machine = StateMachine(self._changes_callback, transition_callback,
+                                           self._debugger.push_changes_tree if self.debug else None)
+
+        self._topic_list = self._state_machine.add_topic("_topicsync/topic_list", DictTopic, is_stateful=True,
+                                                         init_value=
+                                                         {'_topicsync/topic_list': {"type": "dict", "is_stateful": True,
+                                                                                    "boundary_value": {}}}
                                                          )
         self._topic_list.on_add += self._add_topic_raw
         self._topic_list.on_remove += self._remove_topic_raw
-        
+
         self._client_manager = ClientManager(self._state_machine)
         self.set_client_id_count = self._client_manager.set_client_id_count
         self.get_client_id_count = self._client_manager.get_client_id_count
@@ -46,13 +66,12 @@ class TopicsyncServer:
         '''
         Entry point for the server
         '''
-        logger.info(f"Starting ws server on port {self._port}")
         self._client_manager.register_message_handler("action",self._handle_action)
         self._client_manager.register_message_handler("request",self._handle_request)
         await asyncio.gather(
             self._debugger.run() if self.debug else asyncio.sleep(0),
             self._client_manager.run(),
-            websockets_serve(self._client_manager.handle_client,self._host,self._port),
+            self.client_server.serve(self._client_manager.handle_client)
         )
         
     """
@@ -176,7 +195,7 @@ class TopicsyncServer:
         logger.debug(f"Added topic {topic_name}")
         new_topic = self.topic(topic_name,type)
         return new_topic
-        
+
     def remove_topic(self, topic_name):
         if not self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} does not exist")
@@ -199,3 +218,32 @@ class TopicsyncServer:
     
     def get_action_source(self):
         return self._action_source
+
+
+class WsClientServer(ClientServer):
+    def __init__(self, port: int, host: str = 'localhost') -> None:
+        self._port = port
+        self._host = host
+        self._handle_client = None
+
+    async def serve(self, handle_client: Callable[[ClientCommFactory], Awaitable[ClientCommProtocol]]):
+        logger.info(f"Starting ws server on port {self._port}")
+        self._handle_client = handle_client
+        await websockets_serve(self._handler, self._host,self._port)
+
+    async def _handler(self, ws: WebSocketServerProtocol, path):
+        await self._handle_client(lambda: WsComm(ws))
+
+
+class WsComm(ClientCommProtocol):
+    def __init__(self,ws:WebSocketServerProtocol):
+        self._ws = ws
+
+    def messages(self) -> AsyncIterator[str]:
+        return self._ws
+
+    async def send(self, message):
+        try:
+            await self._ws.send(message)
+        except ConnectionClosed as e:
+            raise ConnectionClosedException(e)
