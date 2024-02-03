@@ -1,3 +1,9 @@
+## v0.12.0 (2024-02-03)
+
+### Feat
+
+- also enable forward_info on ReversedEmit
+
 ## v0.11.3 (2023-12-12)
 
 ### Fix
