@@ -523,6 +523,14 @@ def merge_dicts(*dicts:dict):
         result.update(d)
     return result
 
+def merge_dicts_in_place(*dicts:dict):
+    '''
+    The order of the dicts is important. The last dict will override the previous ones.
+    '''
+    result = dicts[0]
+    for d in dicts[1:]:
+        result.update(d)
+
 class EventTopic(Topic):
     '''
     Event topic
@@ -546,14 +554,19 @@ class EventTopic(Topic):
         match change:
             case EventChangeTypes.EmitChange():
                 args = merge_dicts(change.args,change.forward_info)
-                forward_info_list = self.on_emit.invoke(auto,**args)
-                if len(forward_info_list)>0 and forward_info_list[0] is not None:
-                    if isinstance(forward_info_list[0],dict):
-                        change.forward_info = forward_info_list[0]
+                returns = self.on_emit.invoke(auto,**args)
+                
+                if len(returns)>0 and returns[0] is not None:
+                    if isinstance(returns[0],dict):
+                        merge_dicts_in_place(change.forward_info,returns[0])
                         
             case EventChangeTypes.ReversedEmitChange():
                 args = merge_dicts(change.args,change.forward_info)
-                self.on_reverse.invoke(auto,**args)
+                returns = self.on_reverse.invoke(auto,**args)
+                
+                if len(returns)>0 and returns[0] is not None:
+                    if isinstance(returns[0],dict):
+                        merge_dicts_in_place(change.forward_info,returns[0])
 
 all_topic_types = {
     'generic': GenericTopic,

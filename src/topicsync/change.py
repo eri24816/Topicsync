@@ -486,10 +486,10 @@ class DictChangeTypes:
 
 class EventChangeTypes:
     class EmitChange(Change):
-        def __init__(self,topic_name,args={},forward_info={},id=None):
+        def __init__(self,topic_name,args=None,id=None,forward_info=None):
             super().__init__(topic_name,id)
-            self.args = args
-            self.forward_info = forward_info
+            self.args = args if args is not None else {}
+            self.forward_info = forward_info if forward_info is not None else {}
         def apply(self,old_value:None):
             return None
         def serialize(self):
@@ -497,7 +497,7 @@ class EventChangeTypes:
             # Additionally, forward_info may be unserializable.
             return {"topic_name":self.topic_name,"topic_type":"event","type":"emit","args":self.args,"id":self.id}
         def inverse(self)->Change:
-            return EventChangeTypes.ReversedEmitChange(self.topic_name,self.args,self.forward_info)
+            return EventChangeTypes.ReversedEmitChange(self.topic_name,self.args,forward_info=self.forward_info)
         def __eq__(self, other):
             if not isinstance(other, EventChangeTypes.EmitChange):
                 return False
@@ -506,18 +506,16 @@ class EventChangeTypes:
                 self.forward_info == other.forward_info and \
                 self.id == other.id
     class ReversedEmitChange(Change):
-            def __init__(self,topic_name,args={},forward_info={},id=None):
+            def __init__(self,topic_name,args=None,id=None,forward_info=None):
                 super().__init__(topic_name,id)
-                self.args = args
-                self.forward_info = forward_info
+                self.args = args if args is not None else {}
+                self.forward_info = forward_info if forward_info is not None else {}
             def apply(self,old_value:None):
                 return None
             def serialize(self):
-                # Because this method is only used for debugging and sending to clients, we don't need to serialize the forward_info
-                # Additionally, forward_info may be unserializable.
                 return {"topic_name":self.topic_name,"topic_type":"event","type":"reversed_emit","args":self.args,"id":self.id}
             def inverse(self)->Change:
-                return EventChangeTypes.EmitChange(self.topic_name,self.args)
+                return EventChangeTypes.EmitChange(self.topic_name,self.args,forward_info=self.forward_info)
             def __eq__(self, other):
                 if not isinstance(other, EventChangeTypes.ReversedEmitChange):
                     return False
