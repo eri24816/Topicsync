@@ -89,17 +89,18 @@ class StateMachine:
     
     @contextmanager
     def record(self,action_source:int = 0,action_id:str = '',allow_reentry:bool = False,emit_transition:bool = True,phase:Phase = Phase.FORWARDING):
-        if self._is_recording:
-            if not allow_reentry:
-                raise RuntimeError("Cannot call record while already recording")
-            else:
-                # Already recording, just skip to yield
-                yield
-                return
+        
+        with self._lock:
+            if self._is_recording:
+                if not allow_reentry:
+                    raise RuntimeError("Cannot call record while already recording")
+                else:
+                    # Already recording, just skip to yield
+                    yield
+                    return
             
         # Set up the recording
 
-        with self._lock:
             self._is_recording = True
             self._phase = phase
             self._mode = Mode.AUTO
