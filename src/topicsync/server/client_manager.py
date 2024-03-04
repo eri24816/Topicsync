@@ -4,7 +4,7 @@ import json
 import logging
 from topicsync.server.update_buffer import UpdateBuffer
 
-from topicsync.state_machine.state_machine import StateMachine
+from topicsync.state_machine.state_machine import ALREADY_LOGGED_ERROR_NOTE, StateMachine
 from topicsync.utils import SimpleAction
 logger = logging.getLogger(__name__)
 import traceback
@@ -109,8 +109,8 @@ class ClientManager:
                     if isinstance(return_value,Awaitable):
                         await return_value
                 except Exception as e:
-                    logger.warn(f"Error handling message {message_type}:\n{traceback.format_exc()}")
-                    #TODO: send error message to client
+                    if ALREADY_LOGGED_ERROR_NOTE not in e.__notes__:
+                        logger.warn(f"Error handling message {message_type}:\n{traceback.format_exc()}")
                     continue
 
         except ConnectionClosedException as e:

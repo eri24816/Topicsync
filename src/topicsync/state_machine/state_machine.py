@@ -38,6 +38,9 @@ class ErrorState(enum.Enum):
     RECOVERING = 1
     CRITICAL = 2
 
+# this note is added to the exception when an error is already logged
+ALREADY_LOGGED_ERROR_NOTE = 'topicsync already logged the error'
+
 class StateMachine:
     def __init__(self, 
             changes_callback:Callable[[List[Change],str], None]=lambda *args:None, 
@@ -110,12 +113,12 @@ class StateMachine:
             self._transition_tree = TransitionTree(self.get_topic,self._changes_list,self._changes_tree)
             try:
                 yield
-            except Exception:
+            except Exception as e:
                 if self._error_state == ErrorState.CRITICAL:
                     if self._debug:
                         self._changes_tree.root.tag = Tag.ERROR
                 else:
-                    self._try_recover()
+                    self._try_recover(e)
                 raise
             else:
                 current_transition = list(self._transition_tree.preorder_traversal(self._transition_tree.root))
@@ -152,19 +155,21 @@ class StateMachine:
 
         # unlock
 
-    def _try_recover(self):
+    def _try_recover(self,exception:Exception):
         if self._error_state == ErrorState.CRITICAL:
             # Can't recover from critical error
             return
         
         assert self._error_state == ErrorState.NO_ERROR
         
-        logger.warning("An error has occured in the transition. Cleaning up the failed transition. The error was:\n" + str(traceback.format_exc()))
+        logger.warning("An error has occured in the transition. Cleaning up. The error was:\n" + str(traceback.format_exc()))
+        exception.add_note(ALREADY_LOGGED_ERROR_NOTE)
         self._error_state = ErrorState.RECOVERING
         try:
             self._transition_tree.clear_subtree()
         except Exception as e:
-            logger.error("An error has occured while trying to undo the failed transition. The state is now in an inconsistent state. The error was: \n" +str(traceback.format_exc()))
+            logger.error("An error has occured while trying to clean up the failed transition. The state is now in an inconsistent state QAQ. The error was: \n" +str(traceback.format_exc()))
+            e.add_note(ALREADY_LOGGED_ERROR_NOTE)
             self._error_state = ErrorState.CRITICAL
             raise
         finally:
@@ -237,12 +242,13 @@ class StateMachine:
                     with self.enter_manual_mode():
                         try:
                             topic.notify_listeners(False,change,old_value,new_value)
-                        except:
+                        except Exception as e:
                             if debug:
                                 self._changes_tree.cursor.tag = Tag.ERROR
                             # Can't recover from manual mode
                             self._error_state = ErrorState.CRITICAL
                             logger.error("An error has occured while in manual mode. It can not be recovered. The error was: \n" +str(traceback.format_exc()))
+                            e.add_note(ALREADY_LOGGED_ERROR_NOTE)
                             raise
 
                     # When undoing or redoing, listeners of auto mode are not notified
@@ -251,13 +257,13 @@ class StateMachine:
                         if self._phase == Phase.FORWARDING and self._error_state == ErrorState.NO_ERROR: 
                             # Notify listeners of auto mode
                             topic.notify_listeners(True,change,old_value,new_value)
-                    except:
+                    except Exception as e:
                         if debug:
                             self._changes_tree.cursor.tag = Tag.ERROR
                         # Undo the subtree of changes which was caused in consequence of this change
                         if topic.is_stateful():
                             if self._error_state == ErrorState.NO_ERROR:
-                                self._try_recover()
+                                self._try_recover(e)
                         raise
 
 

@@ -13,7 +13,7 @@ from topicsync.state_machine import state_machine
 from topicsync.server.client_manager import ClientManager, Client, ClientCommProtocol, ConnectionClosedException, \
     ClientCommFactory
 from topicsync.service import Service
-from topicsync.state_machine.state_machine import StateMachine, Transition
+from topicsync.state_machine.state_machine import ALREADY_LOGGED_ERROR_NOTE, StateMachine, Transition
 from topicsync.topic import DictTopic, EventTopic, Topic, SetTopic
 from topicsync.change import Change
 
@@ -102,7 +102,8 @@ class TopicsyncServer:
         except Exception as e:
             sender.send("reject",reason=repr(e))
             tb = traceback.format_exc()
-            logger.warning(f"Error when handling action {action_id} from client {sender.id}:\n{tb}")
+            if ALREADY_LOGGED_ERROR_NOTE not in e.__notes__:
+                logger.warning(f"Error when handling action {action_id} from client {sender.id}:\n{tb}")
 
     async def _handle_request(self, sender:Client, service_name, args, request_id):
         """
