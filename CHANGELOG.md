@@ -1,3 +1,11 @@
+## v0.12.1 (2024-03-05)
+
+### Fix
+
+- avoid duplicated logging
+- temorally disable string version check before is fixed
+- check reentry after aquring lock
+
 ## v0.12.0 (2024-02-03)
 
 ### Feat

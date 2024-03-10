@@ -12,7 +12,7 @@ maintainers = [
 
 [tool.poetry]
 name = "topicsync"
-version = "0.12.0"
+version = "0.12.1"
 description = "A communication tool for multi-client applications over WebSockets."
 
 authors = [
