@@ -116,6 +116,9 @@ class ClientManager:
         except ConnectionClosedException as e:
             logger.info(f"Client {client_id} disconnected: {repr(e)}")
             self._cleanup_client(client)
+        except Exception as e:
+            logger.error(f"Error handling client {client_id}:\n{traceback.format_exc()}")
+            self._cleanup_client(client)
 
     def send_update_or_buffer(self,changes:List[Change],action_id:str):
         self._update_buffer.add_changes(changes,action_id)

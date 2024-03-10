@@ -230,7 +230,7 @@ class WsClientServer(ClientServer):
     async def serve(self, handle_client: Callable[[ClientCommFactory], Awaitable[ClientCommProtocol]]):
         logger.info(f"Starting ws server on port {self._port}")
         self._handle_client = handle_client
-        await websockets_serve(self._handler, self._host,self._port)
+        await websockets_serve(self._handler, self._host,self._port,max_size=2**22) # 4MB
 
     async def _handler(self, ws: WebSocketServerProtocol, path):
         await self._handle_client(lambda: WsComm(ws))
