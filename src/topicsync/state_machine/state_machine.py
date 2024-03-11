@@ -13,7 +13,7 @@ from contextlib import contextmanager, nullcontext
 from typing import Any, Callable, List
 
 from topicsync.change import EventChangeTypes, NullChange
-from topicsync.topic import Topic, topic_factory
+from topicsync.topic import Topic, topic_factory, get_topic_type_from_str
 from topicsync.state_machine.transition_tree import TransitionTree
 if TYPE_CHECKING:
     from topicsync.change import Change
@@ -77,10 +77,19 @@ class StateMachine:
         return topic
     
     def add_topic_s(self,name:str,topic_type:str,is_stateful:bool = True,init_value:Any=None,order_strict=True)->Topic:
-        topic = topic_factory(topic_type,name,self,is_stateful,init_value,order_strict)
-        self._state[name] = topic
+        return self.register_topic(
+            topic_factory(topic_type, name, self, is_stateful, init_value, order_strict)
+        )
+
+    def restore_topic(self, topic_type: str, data) -> Topic:
+        return self.register_topic(
+            get_topic_type_from_str(topic_type).deserialize(data, self)
+        )
+
+    def register_topic(self, topic:Topic) -> Topic:
+        self._state[topic.get_name()] = topic
         return topic
-    
+
     def remove_topic(self,name:str):
         del self._state[name]
 
