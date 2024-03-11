@@ -82,7 +82,10 @@ class TopicsyncServer:
         self._client_manager.send_update_or_buffer(changes,actionID)
 
     def _add_topic_raw(self,topic_name,props):
-        self._state_machine.add_topic_s(topic_name,props["type"],props["is_stateful"],props["boundary_value"],props["order_strict"])
+        if props.get('is_restore',False):
+            self._state_machine.restore_topic(props["type"], props['serialized'])
+        else:
+            self._state_machine.add_topic_s(topic_name,props["type"],props["is_stateful"],props["boundary_value"],props["order_strict"])
 
     def _remove_topic_raw(self,topic_name):
         self._state_machine.remove_topic(topic_name)
@@ -190,9 +193,19 @@ class TopicsyncServer:
         
     T = TypeVar("T", bound=Topic)
     def add_topic(self, topic_name, type: type[T],init_value=None,is_stateful=True,order_strict=True) -> T:
+        return self._add_topic_to_list(topic_name, type, {'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':is_stateful,'order_strict':order_strict})
+
+    def restore_topic(self, topic_name, type: type[T], serialized):
+        return self._add_topic_to_list(topic_name, type, {
+            'type': type.get_type_name(),
+            'serialized': serialized,
+            'is_restore': True,
+        })
+
+    def _add_topic_to_list(self, topic_name: str, type: type[T], value) -> Topic:
         if self._state_machine.has_topic(topic_name):
             raise Exception(f"Topic {topic_name} already exists")
-        self._topic_list.add(topic_name,{'type':type.get_type_name(),'boundary_value':init_value,'is_stateful':is_stateful,'order_strict':order_strict})
+        self._topic_list.add(topic_name, value)
         logger.debug(f"Added topic {topic_name}")
         new_topic = self.topic(topic_name,type)
         return new_topic

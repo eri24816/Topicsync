@@ -149,14 +149,7 @@ class StringChangeTypes:
             try:
                 changes = topic.changes_from(self.topic_version)
             except:
-                #raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
-                '''
-                When the user do (change topic value) -> (delete topic), the undo will be 
-                (create topic) -> (change topic value), which leads to exception here. not sure why.
-                '''
-                # TODO: fix this
-                self.topic_version = current_version
-                return self.result_topic_version
+                raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
 
             for change in changes:
                 if isinstance(change, StringChangeTypes.SetChange):
@@ -221,10 +214,7 @@ class StringChangeTypes:
             try:
                 changes = topic.changes_from(self.topic_version)
             except:
-                #raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
-                # TODO: fix this
-                self.topic_version = current_version
-                return self.result_topic_version
+                raise InvalidChangeError(self, f"Invalid base topic version: {self.topic_version}")
 
             for change in changes:
                 if isinstance(change, StringChangeTypes.SetChange):

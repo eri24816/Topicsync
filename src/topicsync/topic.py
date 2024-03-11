@@ -15,11 +15,14 @@ import abc
 if TYPE_CHECKING:
     from topicsync.state_machine.state_machine import StateMachine
 
+def get_topic_type_from_str(topic_type:str) -> type[Topic]:
+    return all_topic_types[topic_type]
+
 def topic_factory(topic_type,name:str,state_machine:StateMachine,is_stateful:bool = True,init_value=None,order_strict=True) -> Topic:
     '''
     Create a topic of the given type.
     '''
-    return all_topic_types[topic_type](name,state_machine,is_stateful,init_value,order_strict)
+    return get_topic_type_from_str(topic_type)(name,state_machine,is_stateful,init_value,order_strict)
 
 class Topic(metaclass = abc.ABCMeta):
     @classmethod
@@ -156,6 +159,63 @@ class Topic(metaclass = abc.ABCMeta):
         '''
         return changes
 
+    @staticmethod
+    def get_info(serialized: Dict):
+        return {
+            'value': serialized['basic'][1],
+            'stateful': serialized['basic'][2],
+            'order_strict': serialized['basic'][3]
+        }
+
+    def serialize(self):
+        return {
+            'basic': [
+                self.get_name(), self.get(), self.is_stateful(), self.is_order_strict()
+            ],
+            'additional': self.serialize_additional()
+        }
+
+    def serialize_additional(self):
+        '''
+        Override this method to serialize internal states other than the value.
+        The return value will be provided to restore_additional() when the topic is restoring, after init.
+        '''
+        return None
+
+    @classmethod
+    def deserialize(cls, data, state_machine: StateMachine):
+        if isinstance(data, list):
+            data = cls._convert_old_format(data)
+        name, value, is_stateful, order_strict = data['basic']
+        topic = cls(name, state_machine, is_stateful, init_value=value, order_strict=order_strict)
+        topic.restore_additional(data['additional'])
+
+        return topic
+
+    @classmethod
+    def _convert_old_format(cls, data):
+        # DEPRECATED old format.
+        if len(data) == 4:
+            name, type_name, value, is_stateful = data
+            order_strict = is_stateful
+        else:
+            name, type_name, value, is_stateful, order_strict = data
+
+        return {
+            'basic': [
+                name, value, is_stateful, order_strict
+            ],
+            'additional': None
+        }
+
+    def restore_additional(self, data):
+        '''
+        for a deserialize implementation, it should restore its internal state
+        without triggering any registered callbacks, since this is part of the restoration
+        '''
+        pass
+
+
 T = TypeVar('T')
 class GenericTopic(Topic,Generic[T]):
     '''
@@ -242,6 +302,16 @@ class StringTopic(Topic):
 
     def to_binary(self):
         return base64.b64decode(self._value)
+
+    def serialize_additional(self):
+        return {'version': self.version,
+                'version_to_index': self.version_to_index,
+                'changes': [change.serialize() for change in self.changes]}
+
+    def restore_additional(self, data):
+        self.version = data['version']
+        self.version_to_index = data['version_to_index']
+        self.changes = [Change.deserialize(change) for change in data['changes']]
 
         
 class IntTopic(Topic):
