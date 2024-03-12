@@ -109,7 +109,7 @@ class ClientManager:
                     if isinstance(return_value,Awaitable):
                         await return_value
                 except Exception as e:
-                    if ALREADY_LOGGED_ERROR_NOTE not in e.__notes__:
+                    if not hasattr(e,"__notes__") or ALREADY_LOGGED_ERROR_NOTE not in e.__notes__:
                         logger.warn(f"Error handling message {message_type}:\n{traceback.format_exc()}")
                     continue
 
