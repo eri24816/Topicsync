@@ -12,7 +12,7 @@ maintainers = [
 
 [tool.poetry]
 name = "topicsync"
-version = "0.12.1"
+version = "0.13.0"
 description = "A communication tool for multi-client applications over WebSockets."
 
 authors = [
@@ -55,7 +55,7 @@ tag_format = "v$version"
 version_scheme = "pep440"
 version_provider = "poetry"
 update_changelog_on_bump = true
-major_version_zero = true
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

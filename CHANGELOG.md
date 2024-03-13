@@ -1,3 +1,10 @@
+## v0.13.0 (2024-03-13)
+
+### Fix
+
+- fix logging bug
+- raise max message size to 4mb
+
 ## v0.12.1 (2024-03-05)
 
 ### Fix
