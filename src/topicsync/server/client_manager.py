@@ -46,7 +46,11 @@ class Client:
         logger.debug(f"<{self.id} {message[:100]}")
 
     async def send_async(self,*args,**kwargs):
-        await self._send_raw(make_message(*args,**kwargs))
+        try:
+            await self._send_raw(make_message(*args,**kwargs))
+        except Exception as e:
+            print(f"Error sending message to client, args: {args}, kwargs: {kwargs}",e)
+            raise
 
     def send(self,*args,**kwargs):
         self._sending_queue.put_nowait((self,args,kwargs))
