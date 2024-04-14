@@ -28,16 +28,13 @@ class ClientServer(Protocol):
 class TopicsyncServer:
     # The init stays the same for backwards compatibility
     # though I would recommend to replace it with _initialize
-    def __init__(self, port: int, host:str='localhost',transition_callback=lambda transition:None, client_server: Optional[ClientServer] = None) -> None:
+    def __init__(self, transition_callback=lambda transition:None) -> None:
         self.debug = os.environ.get('DEBUG') is not None and (os.environ.get('DEBUG').lower() == 'true')
         debugger = Debugger(8800, 'localhost') if self.debug else None
-        if client_server:
-            self._initialize(client_server, debugger, transition_callback)
-        else:
-            self._initialize(WsClientServer(port, host), debugger, transition_callback)
+        
+        self._initialize(debugger, transition_callback)
 
-    def _initialize(self, client_server: ClientServer, debugger: Optional[Debugger], transition_callback):
-        self.client_server = client_server
+    def _initialize(self, debugger: Optional[Debugger], transition_callback):
         self._services: Dict[str, Service] = {}
         self._debugger = debugger
         self._state_machine = StateMachine(self._changes_callback, transition_callback,
@@ -71,7 +68,6 @@ class TopicsyncServer:
         await asyncio.gather(
             self._debugger.run() if self.debug else asyncio.sleep(0),
             self._client_manager.run(),
-            self.client_server.serve(self._client_manager.handle_client)
         )
         
     """
@@ -130,6 +126,9 @@ class TopicsyncServer:
     """
     API
     """
+
+    async def handle_client(self, client: ClientCommProtocol):
+        await self._client_manager.handle_client(client)
 
     def register_service(self, service_name: str, callback: Callable, pass_sender=False):
         """
@@ -233,31 +232,3 @@ class TopicsyncServer:
     def get_action_source(self):
         return self._action_source
 
-
-class WsClientServer(ClientServer):
-    def __init__(self, port: int, host: str = 'localhost') -> None:
-        self._port = port
-        self._host = host
-        self._handle_client = None
-
-    async def serve(self, handle_client: Callable[[ClientCommFactory], Awaitable[ClientCommProtocol]]):
-        logger.info(f"Starting ws server on port {self._port}")
-        self._handle_client = handle_client
-        await websockets_serve(self._handler, self._host,self._port,max_size=2**22) # 4MB
-
-    async def _handler(self, ws: WebSocketServerProtocol, path):
-        await self._handle_client(lambda: WsComm(ws))
-
-
-class WsComm(ClientCommProtocol):
-    def __init__(self,ws:WebSocketServerProtocol):
-        self._ws = ws
-
-    def messages(self) -> AsyncIterator[str]:
-        return self._ws
-
-    async def send(self, message):
-        try:
-            await self._ws.send(message)
-        except ConnectionClosed as e:
-            raise ConnectionClosedException(e)

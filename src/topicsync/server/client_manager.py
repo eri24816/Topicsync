@@ -87,13 +87,13 @@ class ClientManager:
         self._sending_queue.put_nowait((client,args,kwargs))
 
 
-    async def handle_client(self, client_comm_factory: ClientCommFactory):
+    async def handle_client(self, client_comm: ClientCommProtocol):
         '''
         Handle a client connection. 
         '''
 
         client_id = next(self._client_id_count)
-        client = self._clients[client_id] = Client(client_id, client_comm_factory(), self._sending_queue)
+        client = self._clients[client_id] = Client(client_id, client_comm, self._sending_queue)
 
         try:
             logger.info(f"Client {client_id} connected")
